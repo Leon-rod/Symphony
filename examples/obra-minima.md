@@ -6,7 +6,7 @@ Un repo, un director, un atril, dos tutti (uno implementa, otro testea). Todo co
 # 1. La obra y el director
 sym init login-validate --repos api=~/code/api --base main --root ~/repertorio
 cd ~/repertorio/login-validate
-sym launch D --exec
+sym launch D --wave              # o --exec si no estás en Wave
 #   → el director hace `relevamiento` con vos, escribe brief.md,
 #     y en `partitura` crea el atril:
 #       sym node create D --kind atril --title "Auth" --repos api
@@ -30,6 +30,9 @@ sym launch A1.T2 --exec          # antes de esto, sym se niega: A1.T1 no estaba 
 #   → el tester lee TESTING.md, escribe tests con // AC-n, done.
 #   → `critica` hace el red check; si rechaza dos veces por el mismo AC,
 #     `afinacion` lo sube: sym event A1.T2 upgraded → sym launch A1.T2
+
+# Tablero (en cualquier momento, en otro bloque)
+sym board --wave                 # diagrama en vivo; cada sym event lo actualiza
 
 # 5. Cierre
 #   → el atril mergea A1.T2, corre sus criterios, done.

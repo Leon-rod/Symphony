@@ -108,7 +108,7 @@ Estas reglas son el contrato. El objetivo es que el albedrío quede en el *conte
 
 `mode` de un nodo: `plan` (dividir y delegar), `execute` (hacer la tarea), `review` (evaluar hijos), `integrate` (mergear hijos y correr criterios propios), `done`.
 
-Los cambios se registran con `sym event <ID> <tipo>`. Tipos: `spawned`, `started`, `checkpoint`, `blocked`, `waiting_human`, `done`, `accepted`, `rejected`, `upgraded`, `merged`, `cleaned`. Cada evento va a `events.jsonl` y actualiza el `status` en la partichela; de ahí sale el diagrama en vivo. Un evento que no registrás es un estado que nadie ve.
+Los cambios se registran con `sym event <ID> <tipo>`. Tipos: `spawned`, `started`, `checkpoint`, `blocked`, `waiting_human`, `done`, `accepted`, `rejected`, `upgraded`, `merged`, `cleaned`. Cada evento va a `events.jsonl`, actualiza el `status` en la partichela y regenera `score.archify.json`; de ahí sale el diagrama en vivo (`sym board`). Un evento que no registrás es un estado que nadie ve.
 
 ## Criterios y tests
 
@@ -170,12 +170,14 @@ No dependas de hooks del runner. La regla 11 es el contrato; los hooks (`runners
 | `sym init <obra> --repos api=/ruta,web=/ruta [--base main]` | Crea la obra, su `symphony.yaml`, el nodo `D` y sus worktrees. |
 | `sym node create <padre> --kind atril\|tutti\|reparacion --repos api [--tier 1] [--origin A1.T2]` | Crea un hijo: ID, partichela, ramas desde el padre, worktrees, identidad. |
 | `sym node show <ID>` | Imprime la partichela. |
-| `sym launch <ID> [--exec]` | Arma el comando de lanzamiento según el `tier` del nodo. Con `--exec` lo ejecuta en el worktree. |
+| `sym launch <ID> [--exec \| --wave]` | Arma el comando de lanzamiento según el `tier` del nodo. `--exec` lo ejecuta en el worktree; `--wave` lo abre en un bloque nuevo de Wave. |
 | `sym event <ID> <tipo> [-m "mensaje"]` | Registra un evento y actualiza el estado. |
 | `sym check <ID>` | Corre los criterios del nodo en sus worktrees y busca patrones prohibidos en el diff. |
 | `sym merge <ID>` | Mergea la rama del nodo en la de su padre (requiere `accepted`). |
 | `sym blame <repo>/<ruta>` | Dice qué nodo es dueño de ese archivo según los territorios. |
 | `sym status` | Árbol de la obra con estado, modo, nivel e iteración por nodo. |
+| `sym score [--render]` | Regenera `score.archify.json` desde el registro y los eventos; con `--render`, también `score.html`. |
+| `sym board [--wave]` | Preview en vivo de Archify que se actualiza con cada evento. `--wave` lo abre en un bloque web. |
 | `sym clean [<ID>\|--all]` | Borra worktrees y ramas. `--all` es el curtain-call. |
 | `sym doctor` | Verifica dependencias. |
 

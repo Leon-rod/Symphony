@@ -20,8 +20,8 @@ Cuando te pidan esta introducción, mostrá las secciones de abajo adaptadas a l
 ## Instalación
 
 ```
-npx skills add <usuario>/symphony -g        # los skills, para todos los runners
-npm install -g github:<usuario>/symphony     # el comando sym
+npx skills add Leon-rod/Symphony -g          # los skills, para todos los runners
+npm install -g github:Leon-rod/Symphony       # el comando sym
 ```
 
 ## Catálogo de skills
@@ -62,4 +62,8 @@ Los IDs dicen la posición: `A1` cuelga del director, `A1.T2` es el segundo tutt
 6. El director integra, corre la suite completa, abre PR a `main`. Vos aprobás el PR.
 7. `sym clean --all`: curtain-call.
 
-`sym status` en cualquier momento te muestra el árbol y quién está esperando una decisión tuya.
+`sym status` en cualquier momento te muestra el árbol y quién está esperando una decisión tuya. `sym board --wave` abre el mismo árbol como diagrama en vivo en un bloque de Wave; se actualiza solo con cada evento.
+
+## Con Wave
+
+Un workspace por obra; una pestaña para el director y una por atril. `sym launch <ID> --wave` abre cada nodo en su propio bloque, `wsh view nodes/<ID>/partichela.md` muestra su estado al lado, y los badges de los bloques te avisan quién terminó o quién te espera.

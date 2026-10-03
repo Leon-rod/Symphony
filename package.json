@@ -1,5 +1,5 @@
 {
-  "name": "symphony-orchestra",
+  "name": "symphony",
   "version": "0.1.0",
   "description": "Orquestación jerárquica de agentes de código: director → atriles → tutti, con estado en disco y worktrees de git.",
   "type": "module",
@@ -12,5 +12,6 @@
   "dependencies": {
     "yaml": "^2.6.0"
   },
+  "repository": "github:Leon-rod/Symphony",
   "license": "MIT"
 }

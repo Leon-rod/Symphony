@@ -7,8 +7,8 @@ Funciona con Claude Code, Codex CLI y OpenCode (y cualquier runner que lea `AGEN
 ## Instalación
 
 ```
-npx skills add <usuario>/symphony -g          # los skills, para todos los runners
-npm install -g github:<usuario>/symphony       # el comando `sym`
+npx skills add Leon-rod/Symphony -g            # los skills, para todos los runners
+npm install -g github:Leon-rod/Symphony         # el comando `sym`
 sym doctor                                     # qué falta
 ```
 
@@ -21,6 +21,7 @@ sym init mi-feature --repos api=~/code/api,web=~/code/web
 sym launch D --exec            # el director releva con vos y arma la partitura
 sym launch A1 --exec           # cada atril divide y lanza sus tutti
 sym status                     # el árbol, y quién espera una decisión tuya
+sym board --wave               # tablero en vivo (Archify) en un bloque web de Wave
 sym clean --all                # curtain-call
 ```
 
@@ -31,7 +32,7 @@ Para la introducción completa, pedile a cualquier agente con los skills instala
 ```
 skills/        un SKILL.md por fase: symphony (constitución), preludio, relevamiento, partitura,
                partichela, arreglo, lirico, ensayo, critica, afinacion, ensamble, curtain-call
-bin/sym.js     operaciones mecánicas: init, node create, launch, event, check, merge, blame, status, clean, doctor
+bin/sym.js     operaciones mecánicas: init, node create, launch, event, check, merge, blame, status, score, board, clean, doctor
 templates/     partichela.md, symphony.yaml, TESTING.md, identidad (CLAUDE.md / AGENTS.md)
 runners/       notas y hooks opcionales por runner
 examples/      una obra mínima recorrida paso a paso
@@ -45,5 +46,17 @@ examples/      una obra mínima recorrida paso a paso
 - **Criterios, no opiniones.** Aceptar es correr comandos que salen en 0.
 - **Lo mecánico lo hace `sym`.** IDs, ramas, worktrees, estados, límites.
 - **Subir de modelo es relanzar.** Mismo nodo, mismo estado, modelo más capaz, con datos que lo justifiquen.
+
+## Con Wave Terminal
+
+Un workspace de Wave por obra. Una pestaña para el director y una por atril; en cada pestaña, un bloque por nodo.
+
+```
+sym launch A1 --wave           # abre el runner del nodo en un bloque nuevo (wsh run --cwd ...)
+sym board --wave               # abre el diagrama en vivo en un bloque web
+wsh view nodes/A1/partichela.md
+```
+
+Cuando `sym event` corre dentro de un bloque de Wave, pone un badge en el bloque (`waiting_human` rojo, `blocked` naranja, `done` verde) y manda una notificación de escritorio si un nodo te espera a vos.
 
 La constitución completa está en [`skills/symphony/SKILL.md`](skills/symphony/SKILL.md).
