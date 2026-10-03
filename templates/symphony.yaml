@@ -1,0 +1,69 @@
+# Configuración de una obra. La genera `sym init`; editala antes de lanzar el director.
+
+obra: {{obra}}
+created_at: {{created_at}}
+base_branch: {{base_branch}}
+
+# Repos que participan. La clave es el alias que usan las partichelas (repos, territorio, criterios).
+repos:
+{{repos_yaml}}
+
+# Niveles de modelo, del más barato al más caro. `afinacion` sube de a un nivel.
+# `runner` tiene que existir en `runners`; `model` se inyecta en el comando como {model}.
+tiers:
+  - id: 0
+    runner: opencode
+    model: qwen3.6-27b
+    label: local
+  - id: 1
+    runner: claude-code
+    model: haiku
+    label: liviano
+  - id: 2
+    runner: claude-code
+    model: sonnet
+    label: medio
+  - id: 3
+    runner: claude-code
+    model: opus
+    label: alto
+
+# Cómo se lanza cada runner. Placeholders: {model} {prompt} {cwd} {id} {obra}
+# `sym launch` imprime el comando resultante; con --exec lo ejecuta en {cwd}.
+# Ajustá los flags a la versión que tengas instalada de cada CLI.
+runners:
+  claude-code: claude --model {model} "{prompt}"
+  codex: codex --model {model} "{prompt}"
+  opencode: opencode --model {model} --prompt "{prompt}"
+
+# Nivel por defecto con el que nace cada tipo de nodo si no se indica --tier.
+default_tier:
+  director: 3
+  atril: 2
+  tutti: 1
+  reparacion: 2
+
+# Disyuntores. Frenan loops y protegen presupuesto. No son metas.
+limits:
+  max_iterations_per_node: 3     # rechazos antes de waiting_human
+  max_global_suite_runs: 3       # veces que el director puede correr la suite completa
+  circuit_breaker_depth: 6       # profundidad máxima del árbol (segmentos del ID, sin contar D)
+  max_children: 8                # hijos por nodo
+
+afinacion:
+  same_criterion_iterations: 2   # mismo criterio fallando N veces → sube de nivel
+  auto_upgrade_up_to_tier: 2     # hasta acá el padre sube solo; más arriba pide al humano
+
+tests:
+  scope: own                     # cada nodo corre solo sus criterios; la suite completa, solo D
+  # Patrones que `sym check` busca en el diff del nodo. Si aparece uno, el check falla.
+  forbidden_patterns:
+    - NO_ERRORS_SCHEMA
+    - CUSTOM_ELEMENTS_SCHEMA
+    - "\\bfit\\("
+    - "\\bfdescribe\\("
+    - "\\bxit\\("
+    - "\\bxdescribe\\("
+    - "\\.only\\("
+    - "\\.skip\\("
+    - "expect\\(true\\)\\.toBe\\(true\\)"

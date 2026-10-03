@@ -1,0 +1,16 @@
+{
+  "name": "symphony-orchestra",
+  "version": "0.1.0",
+  "description": "Orquestación jerárquica de agentes de código: director → atriles → tutti, con estado en disco y worktrees de git.",
+  "type": "module",
+  "bin": {
+    "sym": "bin/sym.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  },
+  "license": "MIT"
+}

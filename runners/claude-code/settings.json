@@ -1,0 +1,26 @@
+{
+  "_comment": "Opcional. Copiá el bloque hooks a .claude/settings.json del worktree (o global). Reinyecta la partichela después de una compactación. La regla 11 del skill symphony sigue siendo el contrato; esto solo ayuda.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'f=$(sed -n \"s/.*Leé tu partichela: `\\(.*\\)`.*/\\1/p\" CLAUDE.md 2>/dev/null); [ -n \"$f\" ] && { echo \"=== Contexto compactado. Tu partichela: ===\"; cat \"$f\"; }'"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Symphony: antes de compactar, asegurate de que la sección \"Estado actual\" de tu partichela esté al día (regla 11).'"
+          }
+        ]
+      }
+    ]
+  }
+}
