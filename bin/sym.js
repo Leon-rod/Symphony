@@ -120,8 +120,9 @@ function addWorktree(obra, id, repo, fromBranch) {
   const wt = wtPath(obra, id, repo);
   const branch = branchOf(obra, id);
   fs.mkdirSync(path.dirname(wt), { recursive: true });
+  git(repoPath, ['worktree', 'prune'], { allowFail: true }); // registros de worktrees borrados a mano
   const exists = git(repoPath, ['rev-parse', '--verify', '--quiet', branch], { allowFail: true }).status === 0;
-  if (exists) git(repoPath, ['worktree', 'add', wt, branch]);
+  if (exists) { console.error(`sym: aviso: la rama ${branch} ya existía en ${repo}; la reutilizo`); git(repoPath, ['worktree', 'add', wt, branch]); }
   else git(repoPath, ['worktree', 'add', '-b', branch, wt, fromBranch]);
   writeIdentity(obra, id, repo, wt);
   return wt;
@@ -516,24 +517,49 @@ function buildScore(obra) {
   const nodes = obra.registry.nodes;
   const parts = {};
   for (const id of Object.keys(nodes)) parts[id] = readPart(obra, id).front;
-  // Layout en árbol: y por profundidad, x por hojas.
-  const CELL_W = 160, CELL_H = 64, GAP_X = 50, LEVEL_H = 150, X0 = 40, Y0 = 60;
-  const leaves = {}; let cursor = 0; const pos = {};
+  // Layout en árbol: x por hojas (orden de creación), y por profundidad.
+  const CELL_W = 160, CELL_H = 64, GAP_X = 50, X0 = 40, Y0 = 60, DEP_DIP = 22, DEP_STEP = 16, LABEL_PAD = 60;
+  let cursor = 0; const slot = {};
   const walk = (id) => {
     const ch = nodes[id].children;
-    if (!ch.length) { leaves[id] = 1; pos[id] = cursor; cursor += 1; return 1; }
-    let first = cursor, n = 0;
+    if (!ch.length) { slot[id] = cursor; cursor += 1; return 1; }
+    const first = cursor; let n = 0;
     for (const c of ch) n += walk(c);
-    leaves[id] = n; pos[id] = first + (n - 1) / 2; return n;
+    slot[id] = first + (n - 1) / 2; return n;
   };
   walk('D');
+  const xOf = (id) => X0 + slot[id] * (CELL_W + GAP_X);
+  const cxOf = (id) => xOf(id) + CELL_W / 2;
+  // Dependencias entre hermanos: van por debajo de la fila como un puente ortogonal, para no cruzar
+  // a los hermanos intermedios ni pisarlos con la etiqueta. Varias en la misma fila se apilan por
+  // niveles (coloreo de intervalos), y la separación entre filas crece si hacen falta más niveles.
+  const deps = [];
+  for (const id of Object.keys(nodes)) for (const d of parts[id].depends_on || []) {
+    if (!nodes[d] || nodes[d].parent !== nodes[id].parent) continue;
+    deps.push({ from: d, to: id, depth: depthOf(id), lo: Math.min(cxOf(d), cxOf(id)) - LABEL_PAD, hi: Math.max(cxOf(d), cxOf(id)) + LABEL_PAD });
+  }
+  const byRow = {};
+  for (const e of deps) (byRow[e.depth] ||= []).push(e);
+  let maxLevels = 0;
+  for (const row of Object.values(byRow)) {
+    row.sort((a, b) => (a.hi - a.lo) - (b.hi - b.lo));
+    const used = [];
+    for (const e of row) {
+      let L = 0;
+      while ((used[L] || []).some(o => e.lo < o.hi && o.lo < e.hi)) L++;
+      (used[L] ||= []).push(e); e.level = L;
+    }
+    maxLevels = Math.max(maxLevels, used.length);
+  }
+  const LEVEL_H = Math.max(150, CELL_H + DEP_DIP + DEP_STEP * maxLevels + 30);
+  const yOf = (id) => Y0 + depthOf(id) * LEVEL_H;
   const components = Object.keys(nodes).map(id => {
     const f = parts[id]; const n = nodes[id];
     const c = {
       id: compId(id), type: KIND_TYPE[n.kind] || 'external', label: id,
       sublabel: (n.title && n.title !== id ? n.title : n.kind).slice(0, 28),
       tag: `${f.status} · t${f.tier} · i${f.iteration}`,
-      pos: [X0 + pos[id] * (CELL_W + GAP_X), Y0 + depthOf(id) * LEVEL_H], size: [CELL_W, CELL_H],
+      pos: [xOf(id), yOf(id)], size: [CELL_W, CELL_H],
     };
     if (STATUS_ICON[f.status]) c.icon = STATUS_ICON[f.status];
     return c;
@@ -543,7 +569,12 @@ function buildScore(obra) {
     const f = parts[id];
     if (nodes[id].parent) connections.push({ id: `e-${compId(nodes[id].parent)}-${compId(id)}`, from: compId(nodes[id].parent), to: compId(id), fromSide: 'bottom', toSide: 'top',
       variant: ['in_progress', 'blocked', 'waiting_human'].includes(f.status) ? 'emphasis' : f.status === 'planned' ? 'dashed' : 'default' });
-    for (const d of f.depends_on || []) if (nodes[d]) connections.push({ id: `dep-${compId(d)}-${compId(id)}`, from: compId(d), to: compId(id), variant: 'dashed', label: 'depende' });
+  }
+  for (const e of deps) {
+    const y = yOf(e.to) + CELL_H + DEP_DIP + DEP_STEP * e.level;
+    const ax = cxOf(e.from), bx = cxOf(e.to);
+    connections.push({ id: `dep-${compId(e.from)}-${compId(e.to)}`, from: compId(e.from), to: compId(e.to), variant: 'dashed', label: 'depende',
+      fromSide: 'bottom', toSide: 'bottom', via: [[ax, y], [bx, y]], labelAt: [(ax + bx) / 2, y] });
   }
   const boundaries = nodes.D.children.filter(c => nodes[c].kind === 'atril' && nodes[c].children.length).map(c => {
     const wraps = []; const collect = (id) => { wraps.push(compId(id)); nodes[id].children.forEach(collect); }; collect(c);
@@ -579,11 +610,12 @@ function cmdScore({ opt }) {
   if (!archify) { console.log('archify no encontrado: instalalo con `npx skills add tt-a1i/archify -g` o seteá archify: <ruta> en symphony.yaml'); return; }
   if (opt.render || opt.open) {
     const r = spawnSync('node', [archify, 'deliver', 'architecture', json, path.join(obra.dir, 'score.html'), '--json', ...(opt.open ? ['--open'] : [])], { cwd: obra.dir, encoding: 'utf8' });
-    if (r.status !== 0) { console.error((r.stdout + r.stderr).trim().split('\n').slice(-20).join('\n')); fail('archify deliver falló'); }
+    if (r.status !== 0) { console.error((r.stdout + r.stderr).trim().split('\n').slice(-20).join('\n')); fail('archify deliver falló; score.html NO se actualizó (si existe, es de una corrida anterior)'); }
     console.log(`score.html entregado`);
   } else {
     const r = spawnSync('node', [archify, 'validate', 'architecture', json], { cwd: obra.dir, encoding: 'utf8' });
-    console.log(r.status === 0 ? 'validación archify: OK (usá --render para generar score.html)' : (r.stdout + r.stderr).trim().split('\n').slice(-10).join('\n'));
+    if (r.status !== 0) { console.error((r.stdout + r.stderr).trim().split('\n').slice(-12).join('\n')); fail('la validación de archify falló; corregí buildScore o reportalo'); }
+    console.log('validación archify: OK (usá --render para generar score.html)');
   }
 }
 
