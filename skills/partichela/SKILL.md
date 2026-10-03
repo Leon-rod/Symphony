@@ -1,6 +1,6 @@
 ---
 name: partichela
-description: Cómo un nodo Symphony lee, escribe y mantiene su partichela (archivo de estado) y las de sus hijos, incluyendo el checkpoint de "Estado actual", la bitácora y el procedimiento para relanzar un nodo desde cero con solo su ID. Usar cada vez que un nodo arranca, retoma después de perder contexto, o tiene que registrar progreso. Requiere el skill symphony.
+description: "Cómo un nodo Symphony lee, escribe y mantiene su partichela (archivo de estado) y las de sus hijos, incluyendo el checkpoint de 'Estado actual', la bitácora y el procedimiento para relanzar un nodo desde cero con solo su ID. Usar cada vez que un nodo arranca, retoma después de perder contexto, o tiene que registrar progreso. Requiere el skill symphony."
 ---
 
 # Partichela

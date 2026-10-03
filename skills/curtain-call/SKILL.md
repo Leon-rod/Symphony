@@ -1,6 +1,6 @@
 ---
 name: curtain-call
-description: Cierre de una obra Symphony por parte del director: verificar que el PR fue aprobado, borrar worktrees y ramas de todos los nodos, archivar el estado y dejar un resumen con métricas. Usar cuando el usuario pide cerrar, limpiar o archivar una obra, o cuando el PR final fue mergeado. Requiere el skill symphony.
+description: "Cierre de una obra Symphony por parte del director: verificar que el PR fue aprobado, borrar worktrees y ramas de todos los nodos, archivar el estado y dejar un resumen con métricas. Usar cuando el usuario pide cerrar, limpiar o archivar una obra, o cuando el PR final fue mergeado. Requiere el skill symphony."
 ---
 
 # Curtain-call

@@ -1,6 +1,6 @@
 ---
 name: critica
-description: Cómo un nodo padre Symphony evalúa a un hijo que marcó done: correr sym check, hacer el red check de tests, revisar el diff contra territorio y contratos, clasificar las fallas en categorías fijas y emitir accepted o rejected con feedback. Usar cuando un hijo está en done y el padre pasa a modo review. Requiere el skill symphony.
+description: "Cómo un nodo padre Symphony evalúa a un hijo que marcó done: correr sym check, hacer el red check de tests, revisar el diff contra territorio y contratos, clasificar las fallas en categorías fijas y emitir accepted o rejected con feedback. Usar cuando un hijo está en done y el padre pasa a modo review. Requiere el skill symphony."
 ---
 
 # Crítica

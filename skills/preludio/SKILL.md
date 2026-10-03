@@ -1,6 +1,6 @@
 ---
 name: preludio
-description: Introducción a Symphony para el desarrollador humano. Usar cuando alguien pregunta qué es Symphony, cómo se usa, qué skills incluye, qué dependencias necesita, o pide un ejemplo para arrancar. También cuando se invoca /preludio. No es para nodos en ejecución: ellos usan el skill symphony.
+description: "Introducción a Symphony para el desarrollador humano. Usar cuando alguien pregunta qué es Symphony, cómo se usa, qué skills incluye, qué dependencias necesita, o pide un ejemplo para arrancar. También cuando se invoca /preludio. No es para nodos en ejecución: ellos usan el skill symphony."
 ---
 
 # Preludio

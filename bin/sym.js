@@ -163,6 +163,7 @@ function logEvent(obra, id, type, msg, extra = {}) {
 function cmdInit({ pos, opt }) {
   const name = pos[0];
   if (!name) fail('uso: sym init <obra> --repos api=/ruta,web=/ruta [--base main] [--root ./repertorio]');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) fail(`nombre de obra inválido: "${name}". Usá letras, números, punto, guion o guion bajo (va en nombres de rama).`);
   if (!opt.repos) fail('falta --repos alias=/ruta[,alias=/ruta]');
   const base = opt.base || 'main';
   const root = path.resolve(opt.root || 'repertorio');
@@ -260,32 +261,60 @@ function partReady(obra, id) {
   return problems;
 }
 
+// Tokenizador mínimo de templates: respeta comillas simples y dobles, sin escapes.
+function tokenize(s) {
+  const out = []; let cur = '', q = null, has = false;
+  for (const ch of s) {
+    if (q) { if (ch === q) q = null; else cur += ch; }
+    else if (ch === '"' || ch === "'") { q = ch; has = true; }
+    else if (/\s/.test(ch)) { if (cur || has) { out.push(cur); cur = ''; has = false; } }
+    else cur += ch;
+  }
+  if (cur || has) out.push(cur);
+  return out;
+}
+// Cita un argumento para mostrarlo (o para cmd.exe en Windows, donde no hay forma de evitar la shell).
+function quoteArg(a) {
+  if (process.platform === 'win32') return (a === '' || /[\s"&|<>^]/.test(a)) ? '"' + a.replace(/"/g, '\\"') + '"' : a;
+  return /^[\w@%+=:,./\\-]+$/.test(a) ? a : "'" + a.replace(/'/g, "'\\''") + "'";
+}
 function buildLaunch(obra, id, opt) {
   const { front } = readPart(obra, id);
   const tierId = opt.tier !== undefined ? Number(opt.tier) : front.tier;
   const tier = obra.cfg.tiers.find(t => t.id === tierId) || fail(`tier ${tierId} no existe`);
   const runnerTpl = obra.cfg.runners?.[tier.runner] || fail(`runner "${tier.runner}" no definido en symphony.yaml`);
   const cwd = wtPath(obra, id, front.repos[0]);
-  const prompt = `Sos el nodo ${id} de la obra ${obra.cfg.obra}. Leé ${partPath(obra, id)} y seguí el procedimiento "Arranque de un nodo" del skill symphony.`;
-  const cmd = fill1(runnerTpl, { model: tier.model, prompt, cwd, id, obra: obra.cfg.obra });
-  return { cmd, cwd, tier };
+  // Sin comillas dobles en el prompt: es un solo argumento, pero si alguien lo copia a mano no debe romperse.
+  const prompt = `Sos el nodo ${id} de la obra ${obra.cfg.obra}. Leé ${partPath(obra, id)} y seguí el procedimiento de arranque de un nodo del skill symphony.`.replace(/"/g, "'");
+  const vars = { model: tier.model, prompt, cwd, id, obra: obra.cfg.obra };
+  // Compatibilidad con templates viejos que traían "{prompt}" entre comillas.
+  const tpl = String(runnerTpl).replace(/["']\{(\w+)\}["']/g, '{$1}');
+  const argv = tokenize(tpl).map(tok => tok.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`)));
+  if (!argv.length) fail(`el template del runner "${tier.runner}" está vacío`);
+  return { argv, display: argv.map(quoteArg).join(' '), cwd, tier };
 }
 
 function cmdLaunch({ pos, opt }) {
   const obra = loadObra(opt);
-  const id = pos[0] || fail('uso: sym launch <ID> [--exec] [--tier N]');
+  const id = pos[0] || fail('uso: sym launch <ID> [--exec | --wave [--magnified]] [--tier N] [--force]');
   const problems = partReady(obra, id);
   if (problems.length && !opt.force) fail(`${id} no está listo para lanzar: ${problems.join('; ')}. (--force para ignorar)`);
-  const { cmd, cwd, tier } = buildLaunch(obra, id, opt);
+  const { argv, display, cwd, tier } = buildLaunch(obra, id, opt);
   console.log(`# ${id} · tier ${tier.id} (${tier.label || tier.runner}/${tier.model}) · cwd: ${cwd}`);
-  console.log(cmd);
+  console.log(display);
+  const win = process.platform === 'win32';
   if (opt.wave) {
     if (!hasWsh()) fail('wsh no está disponible: corré esto desde un bloque de Wave');
-    const r = spawnSync('wsh', ['run', '--cwd', cwd, ...(opt.magnified ? ['-m'] : []), '-c', cmd], { stdio: 'inherit' });
+    const wargs = ['run', '--cwd', cwd, ...(opt.magnified ? ['-m'] : []), '--', ...argv];
+    // En Windows los runners suelen ser shims .cmd que solo cmd.exe sabe resolver; ahí sí va por shell, citado a mano.
+    const r = win ? spawnSync(['wsh', ...wargs].map(quoteArg).join(' '), { stdio: 'inherit', shell: true })
+                  : spawnSync('wsh', wargs, { stdio: 'inherit' });
     process.exit(r.status ?? 0);
   }
   if (opt.exec) {
-    const child = spawn(cmd, { cwd, shell: true, stdio: 'inherit' });
+    const child = win ? spawn(display, { cwd, shell: true, stdio: 'inherit' })
+                      : spawn(argv[0], argv.slice(1), { cwd, stdio: 'inherit' });
+    child.on('error', e => fail(`no pude ejecutar ${argv[0]}: ${e.message}`));
     child.on('exit', code => process.exit(code ?? 0));
   }
 }

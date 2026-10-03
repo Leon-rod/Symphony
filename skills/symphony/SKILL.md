@@ -1,6 +1,6 @@
 ---
 name: symphony
-description: Constitución del flujo Symphony, una orquestación jerárquica de agentes de código (director → atriles → tutti) con estado en disco, worktrees de git y modelos intercambiables por nodo. Leer SIEMPRE que un agente sea identificado como nodo de una obra ("sos el nodo A1.T2"), encuentre un CLAUDE.md o AGENTS.md de identidad Symphony en su directorio de trabajo, o el usuario mencione symphony, partichela, atril, tutti, obra, repertorio, afinación o curtain-call. Todos los demás skills de Symphony asumen que este ya fue leído.
+description: "Constitución del flujo Symphony, una orquestación jerárquica de agentes de código (director → atriles → tutti) con estado en disco, worktrees de git y modelos intercambiables por nodo. Leer SIEMPRE que un agente sea identificado como nodo de una obra ('sos el nodo A1.T2'), encuentre un CLAUDE.md o AGENTS.md de identidad Symphony en su directorio de trabajo, o el usuario mencione symphony, partichela, atril, tutti, obra, repertorio, afinación o curtain-call. Todos los demás skills de Symphony asumen que este ya fue leído."
 ---
 
 # Symphony

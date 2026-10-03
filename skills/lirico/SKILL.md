@@ -1,6 +1,6 @@
 ---
 name: lirico
-description: Cambiar el modo operativo de un nodo Symphony (plan, execute, review, integrate, done) sin cambiar su identidad ni su posición, y cargar el skill que corresponde al nuevo modo. Usar cuando un atril decide hacer una tarea él mismo, cuando llega un hijo en done, cuando todos los hijos están aceptados, o cuando un nodo terminó. Requiere el skill symphony.
+description: "Cambiar el modo operativo de un nodo Symphony (plan, execute, review, integrate, done) sin cambiar su identidad ni su posición, y cargar el skill que corresponde al nuevo modo. Usar cuando un atril decide hacer una tarea él mismo, cuando llega un hijo en done, cuando todos los hijos están aceptados, o cuando un nodo terminó. Requiere el skill symphony."
 ---
 
 # Lírico

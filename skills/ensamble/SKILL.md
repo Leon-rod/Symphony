@@ -1,6 +1,6 @@
 ---
 name: ensamble
-description: Cómo un nodo padre Symphony integra a sus hijos aceptados en su propia rama con sym merge, en orden de dependencias, resuelve conflictos, corre sus criterios propios y reporta done; y cómo el director hace la integración final, la suite completa y el PR. Usar cuando todos los hijos están accepted y el nodo pasa a modo integrate, o cuando el director integra atriles. Requiere el skill symphony.
+description: "Cómo un nodo padre Symphony integra a sus hijos aceptados en su propia rama con sym merge, en orden de dependencias, resuelve conflictos, corre sus criterios propios y reporta done; y cómo el director hace la integración final, la suite completa y el PR. Usar cuando todos los hijos están accepted y el nodo pasa a modo integrate, o cuando el director integra atriles. Requiere el skill symphony."
 ---
 
 # Ensamble

@@ -1,6 +1,6 @@
 ---
 name: partitura
-description: Segunda fase del director Symphony: convertir un brief cerrado en el árbol inicial de atriles (nodos de primer nivel con territorio, contratos y criterios) y generar el diagrama con sym score (Archify). Usar cuando el brief está confirmado y hay que armar la estructura de la obra, o cuando el usuario pide la partitura o el diagrama de agentes. Requiere el skill symphony.
+description: "Segunda fase del director Symphony: convertir un brief cerrado en el árbol inicial de atriles (nodos de primer nivel con territorio, contratos y criterios) y generar el diagrama con sym score (Archify). Usar cuando el brief está confirmado y hay que armar la estructura de la obra, o cuando el usuario pide la partitura o el diagrama de agentes. Requiere el skill symphony."
 ---
 
 # Partitura

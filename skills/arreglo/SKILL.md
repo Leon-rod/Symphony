@@ -1,6 +1,6 @@
 ---
 name: arreglo
-description: Cómo un atril Symphony en modo plan divide su área en tareas y crea nodos hijos (tutti o sub-atriles) con territorio disjunto, contratos, criterios verificables, dependencias y nivel de modelo. Usar cuando un nodo en modo plan tiene que delegar, cuando recibe un blocked de un hijo y debe replanificar, o cuando el director le pide dividir. Requiere el skill symphony.
+description: "Cómo un atril Symphony en modo plan divide su área en tareas y crea nodos hijos (tutti o sub-atriles) con territorio disjunto, contratos, criterios verificables, dependencias y nivel de modelo. Usar cuando un nodo en modo plan tiene que delegar, cuando recibe un blocked de un hijo y debe replanificar, o cuando el director le pide dividir. Requiere el skill symphony."
 ---
 
 # Arreglo

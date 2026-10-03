@@ -1,6 +1,6 @@
 ---
 name: afinacion
-description: Decidir con datos si un hijo Symphony necesita un modelo de mayor nivel (tier), relanzarlo con el mismo ID y partichela, o pedir aprobación humana. Usar justo después de un rejected en critica, cuando un hijo repite la misma falla, o cuando el usuario pregunta por rendimiento, costo de tokens o qué modelo asignar. Requiere el skill symphony.
+description: "Decidir con datos si un hijo Symphony necesita un modelo de mayor nivel (tier), relanzarlo con el mismo ID y partichela, o pedir aprobación humana. Usar justo después de un rejected en critica, cuando un hijo repite la misma falla, o cuando el usuario pregunta por rendimiento, costo de tokens o qué modelo asignar. Requiere el skill symphony."
 ---
 
 # Afinación

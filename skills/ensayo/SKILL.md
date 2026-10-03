@@ -1,6 +1,6 @@
 ---
 name: ensayo
-description: Loop de trabajo de un nodo Symphony en modo execute: hacer la tarea dentro del territorio, autoverificar con sym check, mantener la partichela y reportar done o blocked. Usar cuando un nodo está en modo execute, cuando un tutti arranca o retoma, o cuando un nodo fue relanzado tras un rejected. Requiere el skill symphony.
+description: "Loop de trabajo de un nodo Symphony en modo execute: hacer la tarea dentro del territorio, autoverificar con sym check, mantener la partichela y reportar done o blocked. Usar cuando un nodo está en modo execute, cuando un tutti arranca o retoma, o cuando un nodo fue relanzado tras un rejected. Requiere el skill symphony."
 ---
 
 # Ensayo

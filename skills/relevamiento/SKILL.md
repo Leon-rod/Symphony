@@ -1,6 +1,6 @@
 ---
 name: relevamiento
-description: Fase inicial del director de una obra Symphony: discutir con el desarrollador qué hay que hacer hasta cerrar un brief, SIN proponer estructura de agentes ni dividir trabajo. Usar cuando el nodo D arranca una obra nueva o el usuario pide relevar, entender el problema o armar el brief. Requiere haber leído el skill symphony.
+description: "Fase inicial del director de una obra Symphony: discutir con el desarrollador qué hay que hacer hasta cerrar un brief, SIN proponer estructura de agentes ni dividir trabajo. Usar cuando el nodo D arranca una obra nueva o el usuario pide relevar, entender el problema o armar el brief. Requiere haber leído el skill symphony."
 ---
 
 # Relevamiento
