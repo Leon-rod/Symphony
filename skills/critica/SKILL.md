@@ -21,6 +21,8 @@ Evaluás contra lo que está escrito en la partichela del hijo. Lo que no está 
 
 **rejected** en cualquier otro caso. Escribí `feedback-<n>.md` (formato en el skill `partichela`), agregá la entrada en `evaluaciones` con las fallas clasificadas, y `sym event <hijo> rejected -m "<categorías separadas por coma>"`. Después consultá `afinacion` antes de relanzar.
 
+En los dos casos, después del veredicto volvés a `sym wait <tuID>`: el hijo rechazado está esperando tu `rejected` para releer el feedback y seguir; no hace falta avisarle nada más.
+
 Si la falla es `spec`: corregí la partichela del hijo (Objetivo, Contratos, Criterios, lo que haya estado mal) **antes** de relanzarlo, y decilo en el feedback. No cuentes `spec` como falla del modelo.
 
 ## Categorías (fijas)

@@ -67,7 +67,7 @@ Toda sesión de un nodo empieza igual, sin excepciones. Esto es lo que hace que 
 1. Determiná tu ID. Está en el `CLAUDE.md`/`AGENTS.md` de tu directorio de trabajo o en el prompt con el que te lanzaron. Si no está en ninguno de los dos, preguntá antes de hacer cualquier otra cosa.
 2. Leé tu partichela completa: `repertorio/<obra>/nodes/<ID>/partichela.md`.
 3. Leé `symphony.yaml` de la obra (límites, niveles, repos).
-4. Leé los `feedback-*.md` de tu directorio, si existen. El último es el que manda.
+4. Leé los `feedback-*.md` de tu directorio, si existen. El último es el que manda. Leé también `inbox.md` si existe: son mensajes de otros nodos o del humano.
 5. Leé las partichelas de tus hijos directos, si tenés. Solo las de tus hijos: no explores el resto del árbol.
 6. Registrá `sym event <ID> started` y seguí desde la sección "Estado actual" de tu partichela.
 
@@ -78,7 +78,7 @@ Un nodo nuevo en un chat nuevo, con solo su ID, tiene que poder hacer estos seis
 Estas reglas son el contrato. El objetivo es que el albedrío quede en el *contenido* del trabajo, no en la *estructura*. Todo lo mecánico lo hace `sym`; no lo hagas a mano.
 
 1. **Hacia abajo, un nivel.** Un nodo solo crea nodos directamente debajo de sí mismo. Nunca hermanos, nunca arriba. Al director lo crea solo el humano.
-2. **Ejecutar no es dividir.** Un nodo en modo `execute` no crea hijos. Si encuentra algo no planeado, marca `blocked` con una descripción y espera. Es el padre, en modo `plan`, quien decide si levanta un nodo nuevo o ajusta la tarea. El descubrimiento sube un nivel; la expansión baja un nivel.
+2. **Ejecutar no es dividir.** Un nodo en modo `execute` no crea hijos. Si encuentra algo no planeado, marca `blocked` con una descripción y espera con `sym wait`. Es el padre, en modo `plan`, quien decide si levanta un nodo nuevo o ajusta la tarea. El descubrimiento sube un nivel; la expansión baja un nivel.
 3. **Escribí solo lo tuyo.** Solo editás tu partichela y, en las de tus hijos directos, únicamente `status`, `iteration`, `tier` y los `feedback-n.md`. Nada más del repertorio es tuyo.
 4. **El director no escribe código.** Releva, dirige, evalúa, integra en la rama de la obra, repara creando nodos `R`, y cierra. Si una tarea le parece trivial, igual crea un atril.
 5. **Territorio cerrado.** Tocás solo lo que dice tu sección "Territorio". Si necesitás tocar algo fuera, es un `blocked`, no una excepción.
@@ -89,6 +89,8 @@ Estas reglas son el contrato. El objetivo es que el albedrío quede en el *conte
 10. **Mergeás solo hijos directos.** En tu propio worktree, después de aceptarlos, en el orden que marcan las dependencias. Nunca rebaseás sobre hermanos. Los conflictos los resuelve el padre, que es quien tiene el contexto de ambos.
 11. **La partichela es tu única memoria.** Releerla es la primera acción de cada turno. Reescribí "Estado actual" después de cada acción significativa. Si un nodo se pierde, se mata y se relanza con `sym launch <ID>`: lo único que se pierde es razonamiento, nunca trabajo.
 12. **Los nombres no cambian.** El ID, las ramas y las rutas de un nodo son los que generó `sym`. No los renombres ni muevas archivos del repertorio a mano.
+13. **El humano no es mensajero.** Nunca le pidas al desarrollador que le lleve un mensaje a otro nodo ni le dictes un texto para pegar. Entre nodos se habla con `sym tell`, y se espera con `sym wait`. Al humano se le habla con `sym tell humano` solo cuando la decisión es suya.
+14. **Esperar es un comando, no silencio.** Un nodo que terminó o se bloqueó corre `sym wait <ID>` en loop hasta que algo cambie. Un padre que lanzó hijos hace lo mismo. Quedarse callado esperando que alguien venga es la única forma de parar la obra.
 
 ## Protocolo de estados
 
@@ -107,6 +109,14 @@ Estas reglas son el contrato. El objetivo es que el albedrío quede en el *conte
 | `cleaned` | Worktrees y rama borrados. | `sym clean` |
 
 `mode` de un nodo: `plan` (dividir y delegar), `execute` (hacer la tarea), `review` (evaluar hijos), `integrate` (mergear hijos y correr criterios propios), `done`.
+
+## Esperar y avisar
+
+No hay nadie que despierte a un nodo: cada uno se queda escuchando. `sym wait <ID>` bloquea hasta que (a) un hijo tuyo pase a `done` o `blocked`, (b) cambie tu propio `status`, `iteration` o `tier` (tu padre te relanzó, te rechazó, te subió de nivel), o (c) llegue un mensaje a tu `inbox.md`. Devuelve qué pasó y el "Estado actual" del hijo que te espera, así actuás sin abrir archivos. Si no pasa nada en `--timeout` segundos (100 por defecto, por debajo del límite por comando de la mayoría de los runners), vuelve con "sin novedades" y lo corrés de nuevo. Si al llamarlo ya hay un hijo en `done` o `blocked`, vuelve en el acto: esos estados solo los resuelve el padre, y hasta que no actúes van a seguir ahí.
+
+El loop de todo nodo, en cualquier modo, es: actuar → registrar el evento → `sym wait` → leer lo que volvió → actuar. Un padre con hijos lanzados vive en ese loop. Un tutti después de `done` o `blocked` vive en ese loop. El único que no espera es el humano: a él se le avisa con `sym tell humano -m "..."` (le llega una notificación y queda en `inbox-humano.md`), y se le avisa solo cuando la decisión es realmente suya.
+
+`sym tell <ID> -m "..." --from <tuID>` deja un mensaje en el inbox del otro nodo. Sirve para lo que no cabe en un evento: una aclaración, un contrato corregido, una pregunta. No reemplaza a la partichela: lo que cambia la tarea de un hijo se escribe en su partichela, y el mensaje le avisa que la relea.
 
 Los cambios se registran con `sym event <ID> <tipo>`. Tipos: `spawned`, `started`, `checkpoint`, `blocked`, `waiting_human`, `done`, `accepted`, `rejected`, `upgraded`, `merged`, `cleaned`. Cada evento va a `events.jsonl`, actualiza el `status` en la partichela y regenera `score.archify.json`; de ahí sale el diagrama en vivo (`sym board`). Un evento que no registrás es un estado que nadie ve.
 
@@ -170,14 +180,17 @@ No dependas de hooks del runner. La regla 11 es el contrato; los hooks (`runners
 | `sym init <obra> --repos api=/ruta,web=/ruta [--base main]` | Crea la obra, su `symphony.yaml`, el nodo `D` y sus worktrees. |
 | `sym node create <padre> --kind atril\|tutti\|reparacion --repos api [--tier 1] [--origin A1.T2]` | Crea un hijo: ID, partichela, ramas desde el padre, worktrees, identidad. |
 | `sym node show <ID>` | Imprime la partichela. |
-| `sym launch <ID> [--exec \| --wave]` | Arma el comando de lanzamiento según el `tier` del nodo. `--exec` lo ejecuta en el worktree; `--wave` lo abre en un bloque nuevo de Wave. |
+| `sym launch <ID> [--exec \| --wave]` | Arma el comando de lanzamiento según el `tier` del nodo. `--exec` lo ejecuta en el worktree (solo desde una terminal interactiva: un agente no puede); `--wave` lo abre en un bloque nuevo de Wave. |
+| `sym tab <ID>` | Imprime el bloque de comandos para abrir ese nodo y sus hijos en una pestaña de Wave: tablero enfocado, partichela y lanzamientos. Es lo que un atril le muestra al humano cuando quiere que se abran sus hijos. |
+| `sym wait <ID> [--timeout 100] [--once]` | Espera novedades: hijos en `done`/`blocked`, cambios en tu propio estado, mensajes. |
+| `sym tell <ID\|humano> -m "..." --from <tuID>` | Deja un mensaje en el inbox de otro nodo o del humano. |
 | `sym event <ID> <tipo> [-m "mensaje"]` | Registra un evento y actualiza el estado. |
 | `sym check <ID>` | Corre los criterios del nodo en sus worktrees y busca patrones prohibidos en el diff. |
 | `sym merge <ID>` | Mergea la rama del nodo en la de su padre (requiere `accepted`). |
 | `sym blame <repo>/<ruta>` | Dice qué nodo es dueño de ese archivo según los territorios. |
 | `sym status` | Árbol de la obra con estado, modo, nivel e iteración por nodo. |
 | `sym score [--render]` | Regenera `score.archify.json` desde el registro y los eventos; con `--render`, también `score.html`. |
-| `sym board [--wave]` | Preview en vivo de Archify que se actualiza con cada evento. `--wave` lo abre en un bloque web. |
+| `sym board [--wave] [--focus ID] [--detach]` | Preview en vivo de Archify que se actualiza con cada evento. `--focus` muestra solo el linaje de un nodo (ancestros, el nodo, sus hijos); `--detach` lo deja en segundo plano; `--wave` lo abre en un bloque web. |
 | `sym clean [<ID>\|--all]` | Borra worktrees y ramas. `--all` es el curtain-call. |
 | `sym doctor` | Verifica dependencias. |
 

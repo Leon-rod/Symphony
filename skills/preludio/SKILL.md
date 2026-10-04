@@ -66,4 +66,8 @@ Los IDs dicen la posición: `A1` cuelga del director, `A1.T2` es el segundo tutt
 
 ## Con Wave
 
-Un workspace por obra; una pestaña para el director y una por atril. `sym launch <ID> --wave` abre cada nodo en su propio bloque, `wsh view nodes/<ID>/partichela.md` muestra su estado al lado, y los badges de los bloques te avisan quién terminó o quién te espera.
+Un workspace por obra; una pestaña por linaje: la del director, y una por atril con sus tutti. `sym tab <ID>` imprime el bloque de comandos de una pestaña (tablero enfocado en ese nodo, su partichela, y el lanzamiento del nodo y sus hijos); lo pegás en un bloque de la pestaña nueva y listo. Cada atril te lo muestra cuando tiene hijos para lanzar. `sym board --wave --focus <ID> --detach` es el tablero de esa pestaña: solo el linaje del nodo, en vivo. Los badges de los bloques te avisan quién terminó o quién te espera, y `sym tell humano` te manda una notificación cuando un nodo necesita una decisión tuya; esos mensajes quedan en `inbox-humano.md`.
+
+## Cómo se hablan los nodos
+
+Nadie despierta a nadie: cada nodo corre `sym wait <ID>` cuando no tiene nada que hacer, y ese comando vuelve cuando un hijo termina o se bloquea, cuando el padre le cambia algo, o cuando le llega un mensaje. Los mensajes van por `sym tell`. Vos no sos el cartero: si un nodo te pide que le lleves algo a otro, decile que use `sym tell`.

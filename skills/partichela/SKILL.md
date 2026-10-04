@@ -37,6 +37,10 @@ Append-only, una línea por hecho, con fecha ISO. `sym event` ya agrega líneas 
 - Lo que no tocás nunca: `id`, `obra`, `parent`, `kind`, `branch`, `created_at`, `children`, `status`, `iteration`, `tier`, `tier_history`. Eso lo escribe `sym`.
 - Mantené el YAML válido. Si dudás, `sym node show <ID>` lo parsea y te avisa.
 
+## Inbox
+
+`nodes/<ID>/inbox.md` es donde `sym tell` deja los mensajes que te mandan. No lo editás: lo leés al arrancar y cada vez que `sym wait` te avisa que hay algo nuevo. Para contestar usás `sym tell <quien> -m "..." --from <tuID>`.
+
 ## Feedback a un hijo
 
 Al rechazar: escribí `nodes/<hijo>/feedback-<n>.md` (n = iteración actual del hijo), agregá la entrada en `evaluaciones` de su frontmatter, y recién después `sym event <hijo> rejected -m "<categorías>"`. El orden importa: el hijo relanzado lee el feedback antes de ver el estado.

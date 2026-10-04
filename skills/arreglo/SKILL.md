@@ -43,6 +43,15 @@ No le pidas a un tutti implementador que escriba tests. Si el área necesita tes
 
 ## Cuando un hijo marca blocked
 
-Leé su partichela. Decidí una de tres: ajustar su partichela y relanzarlo (`sym event <hijo> started`), crear un hermano nuevo que resuelva lo descubierto (con `depends_on` si corresponde), o marcar `waiting_human` si lo descubierto cambia el alcance de tu área. Registralo en tu bitácora.
+`sym wait` ya te trajo su "Estado actual" con lo que encontró y lo que recomienda. Decidí una de tres: ajustar su partichela y relanzarlo (`sym event <hijo> started -m "<qué cambió>"`; si solo necesita una aclaración, `sym tell <hijo> -m "..." --from <tuID>` y después el `started`), crear un hermano nuevo que resuelva lo descubierto (con `depends_on` si corresponde), o marcar `waiting_human` si lo descubierto cambia el alcance de tu área. Registralo en tu bitácora y volvé a `sym wait`.
+
+## Lanzar a los hijos
+
+Vos no tenés terminal interactiva, así que no podés correr `sym launch <hijo> --exec` (el runner interactivo no puede abrirse adentro tuyo). Dos caminos:
+
+- Si estás dentro de un bloque de Wave (`sym doctor` muestra `wsh`), `sym launch <hijo> --wave` abre al hijo en un bloque nuevo de tu misma pestaña.
+- Si no, o si el humano prefiere una pestaña por atril: corré `sym tab <tuID>` y mostrale la salida tal cual. Es un bloque de comandos que él pega en una pestaña nueva y abre tu tablero enfocado, tu partichela y tus hijos. Eso es todo lo que le pedís: no le dictes mensajes ni instrucciones aparte.
+
+En cuanto haya hijos lanzados, entrás al loop: `sym wait <tuID>` → leer qué volvió → actuar → `sym wait <tuID>`. Un hijo `done` te manda a `critica`; un hijo `blocked`, a la sección de abajo; un mensaje, a leerlo. No salgas del loop hasta que todos tus hijos estén `merged`.
 
 Al terminar de dividir: `sym event <tuID> checkpoint -m "arreglo: N hijos"` y pasá a `review` con `lirico` cuando el primero marque `done`.

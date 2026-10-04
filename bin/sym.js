@@ -16,7 +16,7 @@ const KIND_MODE = { atril: 'plan', tutti: 'execute', reparacion: 'execute', dire
 const EVENT_STATUS = {
   spawned: 'planned', started: 'in_progress', checkpoint: null, blocked: 'blocked',
   waiting_human: 'waiting_human', done: 'done', accepted: 'accepted', rejected: 'rejected',
-  upgraded: 'in_progress', merged: 'merged', cleaned: 'cleaned',
+  upgraded: 'in_progress', merged: 'merged', cleaned: 'cleaned', message: null,
 };
 
 // ---------- utilidades ----------
@@ -304,12 +304,17 @@ function cmdLaunch({ pos, opt }) {
   console.log(`# ${id} · tier ${tier.id} (${tier.label || tier.runner}/${tier.model}) · cwd: ${cwd}`);
   console.log(display);
   const win = process.platform === 'win32';
+  if (opt.exec && !process.stdin.isTTY) {
+    // Un agente (sin terminal interactiva) no puede ejecutar un runner interactivo adentro suyo.
+    if (hasWsh()) { console.error(`sym: sin terminal interactiva; lo abro en un bloque de Wave (--wave)`); opt.wave = true; }
+    else { console.log(`\nsym: --exec necesita una terminal interactiva y acá no hay (ni wsh). Pedile al humano que abra el comando de arriba en una pestaña de Wave: \`sym tab ${parentOf(id) || id}\` le da el bloque completo para pegar.`); return; }
+  }
   if (opt.wave) {
-    if (!hasWsh()) fail('wsh no está disponible: corré esto desde un bloque de Wave');
+    if (!hasWsh()) fail('wsh no está disponible: corré esto desde un bloque de Wave (o instalá wsh en la conexión WSL/SSH)');
     const wargs = ['run', '--cwd', cwd, ...(opt.magnified ? ['-m'] : []), '--', ...argv];
     // En Windows los runners suelen ser shims .cmd que solo cmd.exe sabe resolver; ahí sí va por shell, citado a mano.
-    const r = win ? spawnSync(['wsh', ...wargs].map(quoteArg).join(' '), { stdio: 'inherit', shell: true })
-                  : spawnSync('wsh', wargs, { stdio: 'inherit' });
+    const r = win ? spawnSync([wshBin(), ...wargs].map(quoteArg).join(' '), { stdio: 'inherit', shell: true })
+                  : spawnSync(wshBin(), wargs, { stdio: 'inherit' });
     process.exit(r.status ?? 0);
   }
   if (opt.exec) {
@@ -513,8 +518,16 @@ function findArchify(obra) {
   return null;
 }
 
-function buildScore(obra) {
-  const nodes = obra.registry.nodes;
+function buildScore(obra, focus = null) {
+  const all = obra.registry.nodes;
+  let keep = null;
+  if (focus) {
+    keep = new Set([focus, ...all[focus].children]);
+    for (let p = all[focus].parent; p; p = all[p].parent) keep.add(p);
+  }
+  // Vista filtrada del registro: mismos objetos, pero los hijos fuera del linaje no existen.
+  const nodes = {};
+  for (const id of Object.keys(all)) if (!keep || keep.has(id)) nodes[id] = { ...all[id], children: all[id].children.filter(c => !keep || keep.has(c)) };
   const parts = {};
   for (const id of Object.keys(nodes)) parts[id] = readPart(obra, id).front;
   // Layout en árbol: x por hojas (orden de creación), y por profundidad.
@@ -562,13 +575,14 @@ function buildScore(obra) {
       pos: [xOf(id), yOf(id)], size: [CELL_W, CELL_H],
     };
     if (STATUS_ICON[f.status]) c.icon = STATUS_ICON[f.status];
+    else if (id === focus) c.icon = 'active';
     return c;
   });
   const connections = [];
   for (const id of Object.keys(nodes)) {
     const f = parts[id];
     if (nodes[id].parent) connections.push({ id: `e-${compId(nodes[id].parent)}-${compId(id)}`, from: compId(nodes[id].parent), to: compId(id), fromSide: 'bottom', toSide: 'top',
-      variant: ['in_progress', 'blocked', 'waiting_human'].includes(f.status) ? 'emphasis' : f.status === 'planned' ? 'dashed' : 'default' });
+      variant: ['in_progress', 'blocked', 'waiting_human'].includes(f.status) || id === focus || nodes[id].parent === focus ? 'emphasis' : f.status === 'planned' ? 'dashed' : 'default' });
   }
   for (const e of deps) {
     const y = yOf(e.to) + CELL_H + DEP_DIP + DEP_STEP * e.level;
@@ -576,13 +590,19 @@ function buildScore(obra) {
     connections.push({ id: `dep-${compId(e.from)}-${compId(e.to)}`, from: compId(e.from), to: compId(e.to), variant: 'dashed', label: 'depende',
       fromSide: 'bottom', toSide: 'bottom', via: [[ax, y], [bx, y]], labelAt: [(ax + bx) / 2, y] });
   }
-  const boundaries = nodes.D.children.filter(c => nodes[c].kind === 'atril' && nodes[c].children.length).map(c => {
-    const wraps = []; const collect = (id) => { wraps.push(compId(id)); nodes[id].children.forEach(collect); }; collect(c);
-    return { kind: 'region', label: `${c} · ${nodes[c].title || ''}`.trim(), wraps };
-  });
+  const boundaries = focus
+    ? (nodes[focus].children.length ? [{ kind: 'region', label: `foco ${focus}`, wraps: [compId(focus), ...nodes[focus].children.map(compId)] }] : [])
+    : nodes.D.children.filter(c => nodes[c].kind === 'atril' && nodes[c].children.length).map(c => {
+      const wraps = []; const collect = (id) => { wraps.push(compId(id)); nodes[id].children.forEach(collect); }; collect(c);
+      return { kind: 'region', label: `${c} · ${nodes[c].title || ''}`.trim(), wraps };
+    });
   const byStatus = (s) => Object.keys(nodes).filter(id => parts[id].status === s);
-  const events = fs.existsSync(path.join(obra.dir, 'events.jsonl')) ? fs.readFileSync(path.join(obra.dir, 'events.jsonl'), 'utf8').trim().split('\n').filter(Boolean).slice(-6).reverse().map(l => { try { const e = JSON.parse(l); return `${e.ts.slice(11, 16)} ${e.id} ${e.type}${e.msg ? ': ' + e.msg : ''}`.slice(0, 80); } catch { return null; } }).filter(Boolean) : [];
-  const cards = [
+  const events = fs.existsSync(path.join(obra.dir, 'events.jsonl')) ? fs.readFileSync(path.join(obra.dir, 'events.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(e => e && (!keep || keep.has(e.id) || keep.has(e.to))).slice(-6).reverse().map(e => `${e.ts.slice(11, 16)} ${e.id} ${e.type}${e.to ? ' → ' + e.to : ''}${e.msg ? ': ' + e.msg : ''}`.slice(0, 80)) : [];
+  const cards = focus ? [
+    { dot: 'cyan', title: `Nodo ${focus}`, items: [`${parts[focus].status} · modo ${parts[focus].mode}`, `tier ${parts[focus].tier} · iteración ${parts[focus].iteration}`, `padre: ${nodes[focus].parent || 'humano'}`] },
+    { dot: 'amber', title: 'Hijos', items: nodes[focus].children.length ? nodes[focus].children.map(c => `${c} · ${parts[c].status}`) : ['sin hijos'] },
+    { dot: 'slate', title: 'Últimos eventos del linaje', items: events.length ? events : ['sin eventos'] },
+  ] : [
     { dot: 'rose', title: 'Esperan al humano', items: byStatus('waiting_human').length ? byStatus('waiting_human') : ['nadie'] },
     { dot: 'amber', title: 'Bloqueados', items: byStatus('blocked').length ? byStatus('blocked') : ['nadie'] },
     { dot: 'cyan', title: 'En progreso', items: byStatus('in_progress').length ? byStatus('in_progress') : ['nadie'] },
@@ -590,7 +610,7 @@ function buildScore(obra) {
   ];
   return {
     schema_version: 1, diagram_type: 'architecture',
-    meta: { title: `Symphony · ${obra.cfg.obra}`, subtitle: `actualizado ${now().slice(0, 16).replace('T', ' ')}`, output: 'score.html', quality_profile: 'standard', animation: 'none' },
+    meta: { title: `Symphony · ${obra.cfg.obra}${focus ? ' · foco ' + focus : ''}`, subtitle: `actualizado ${now().slice(0, 16).replace('T', ' ')}`, output: focus ? `score.${focus}.html` : 'score.html', quality_profile: 'standard', animation: 'none' },
     components, boundaries, connections, cards,
   };
 }
@@ -598,6 +618,11 @@ function buildScore(obra) {
 function writeScore(obra) {
   try {
     fs.writeFileSync(path.join(obra.dir, 'score.archify.json'), JSON.stringify(buildScore(obra), null, 2) + '\n');
+    // Tableros enfocados que estén abiertos (score.<ID>.archify.json) se regeneran también.
+    for (const f of fs.readdirSync(obra.dir)) {
+      const m = f.match(/^score\.(.+)\.archify\.json$/);
+      if (m && obra.registry.nodes[m[1]]) fs.writeFileSync(path.join(obra.dir, f), JSON.stringify(buildScore(obra, m[1]), null, 2) + '\n');
+    }
   } catch (e) { console.error(`sym: no pude regenerar score.archify.json: ${e.message}`); }
 }
 
@@ -619,46 +644,178 @@ function cmdScore({ opt }) {
   }
 }
 
+function boardFiles(obra, focus) {
+  const stem = focus ? `score.${focus}` : 'score';
+  return { json: path.join(obra.dir, `${stem}.archify.json`), html: path.join(obra.dir, `${stem}.html`), log: path.join(obra.dir, `.${stem}.board.log`), pid: path.join(obra.dir, `.${stem}.board.pid`) };
+}
 function cmdBoard({ opt }) {
   const obra = loadObra(opt);
-  writeScore(obra);
+  const focus = opt.focus || null;
+  if (focus && !obra.registry.nodes[focus]) fail(`${focus} no existe`);
+  const f = boardFiles(obra, focus);
+  if (opt.stop) {
+    if (fs.existsSync(f.pid)) { try { process.kill(Number(fs.readFileSync(f.pid, 'utf8'))); } catch { /* ya no corre */ } fs.rmSync(f.pid, { force: true }); console.log('board detenido'); }
+    else console.log('no hay board corriendo para ese foco');
+    return;
+  }
+  if (focus) fs.writeFileSync(f.json, JSON.stringify(buildScore(obra, focus), null, 2) + '\n'); else writeScore(obra);
   const archify = findArchify(obra) || fail('archify no encontrado (npx skills add tt-a1i/archify -g)');
-  const json = path.join(obra.dir, 'score.archify.json');
-  const html = path.join(obra.dir, 'score.html');
-  const child = spawn('node', [archify, 'preview', 'architecture', json, html, '--no-open'], { cwd: obra.dir, stdio: ['ignore', 'pipe', 'pipe'] });
-  let opened = false;
-  const onData = (buf) => {
-    const s = buf.toString(); process.stdout.write(s);
-    const m = s.match(/https?:\/\/127\.0\.0\.1:\d+[^\s"']*/);
-    if (m && !opened) {
-      opened = true;
-      if (opt.wave && hasWsh()) spawnSync('wsh', ['web', 'open', m[0]], { stdio: 'inherit' });
-      console.log(`\ntablero: ${m[0]}  (Ctrl-C para cerrar; cada \`sym event\` lo actualiza)`);
-    }
+  const args = [archify, 'preview', 'architecture', f.json, f.html, '--no-open'];
+  const urlRe = /https?:\/\/127\.0\.0\.1:\d+[^\s"']*/;
+  const announce = (url) => {
+    if (opt.wave && hasWsh()) wsh(['web', 'open', url], { stdio: 'inherit' });
+    console.log(`tablero${focus ? ' (foco ' + focus + ')' : ''}: ${url}  — se actualiza con cada sym event`);
   };
+  if (opt.detach) {
+    const out = fs.openSync(f.log, 'w');
+    const child = spawn('node', args, { cwd: obra.dir, detached: true, stdio: ['ignore', out, out], windowsHide: true });
+    fs.writeFileSync(f.pid, String(child.pid));
+    child.unref();
+    for (let i = 0; i < 40; i++) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+      const m = fs.readFileSync(f.log, 'utf8').match(urlRe);
+      if (m) { announce(m[0]); console.log(`corre en segundo plano (pid ${child.pid}); para pararlo: sym board --stop${focus ? ' --focus ' + focus : ''}`); return; }
+    }
+    fail(`el preview no arrancó en 10s; mirá ${f.log}`);
+  }
+  const child = spawn('node', args, { cwd: obra.dir, stdio: ['ignore', 'pipe', 'pipe'] });
+  let opened = false;
+  const onData = (buf) => { const s = buf.toString(); process.stdout.write(s); const m = s.match(urlRe); if (m && !opened) { opened = true; announce(m[0]); console.log('(Ctrl-C para cerrar)'); } };
   child.stdout.on('data', onData); child.stderr.on('data', onData);
   child.on('exit', code => process.exit(code ?? 0));
 }
 
+// ---------- comunicación: wait / tell ----------
+
+function sectionOf(text, title) {
+  const m = text.split(`## ${title}`)[1];
+  return m ? m.split(/\n## /)[0].replace(/<!--[\s\S]*?-->/g, '').trim() : '';
+}
+function inboxPath(obra, id) { return id === 'humano' ? path.join(obra.dir, 'inbox-humano.md') : path.join(nodeDir(obra, id), 'inbox.md'); }
+function inboxLines(obra, id) { const p = inboxPath(obra, id); return fs.existsSync(p) ? fs.readFileSync(p, 'utf8').split('\n').filter(l => l.startsWith('- ')) : []; }
+function lastEventOf(obra, id) {
+  const p = path.join(obra.dir, 'events.jsonl');
+  if (!fs.existsSync(p)) return null;
+  const lines = fs.readFileSync(p, 'utf8').trim().split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) { try { const e = JSON.parse(lines[i]); if (e.id === id && e.type !== 'message' && e.type !== 'checkpoint') return e; } catch { /* línea rota */ } }
+  return null;
+}
+function snapshot(obra, id) {
+  const self = readPart(obra, id).front;
+  const children = {};
+  for (const c of obra.registry.nodes[id].children) children[c] = readPart(obra, c).front.status;
+  return { status: self.status, iteration: self.iteration, tier: self.tier, children, inbox: inboxLines(obra, id).length };
+}
+const NEEDS_PARENT = new Set(['done', 'blocked']);
+
+function cmdWait({ pos, opt }) {
+  const obra = loadObra(opt);
+  const id = pos[0] || fail('uso: sym wait <ID> [--timeout 100] [--interval 2] [--once]');
+  if (!obra.registry.nodes[id]) fail(`${id} no existe`);
+  const timeout = Number(opt.timeout ?? 100) * 1000, interval = Number(opt.interval ?? 2) * 1000;
+  const t0 = Date.now();
+  const base = snapshot(obra, id);
+  const report = (snap, prevInbox) => {
+    const out = [];
+    for (const [c, st] of Object.entries(snap.children)) {
+      if (NEEDS_PARENT.has(st) || st !== base.children[c]) {
+        const ev = lastEventOf(obra, c);
+        out.push(`${c} → ${st}${ev?.msg ? ` — ${ev.msg}` : ''}${ev ? ` (iter ${ev.iteration}, tier ${ev.tier})` : ''}`);
+        if (NEEDS_PARENT.has(st)) { const est = sectionOf(readPart(obra, c).text, 'Estado actual'); if (est) out.push('  Estado actual de ' + c + ':\n    ' + est.split('\n').join('\n    ')); }
+      }
+    }
+    if (snap.status !== base.status || snap.iteration !== base.iteration || snap.tier !== base.tier) {
+      const ev = lastEventOf(obra, id);
+      out.push(`${id} (vos) → ${snap.status}, iter ${snap.iteration}, tier ${snap.tier}${ev?.msg ? ` — ${ev.msg}` : ''}`);
+      const fb = path.join(nodeDir(obra, id), `feedback-${snap.iteration - 1}.md`);
+      if (snap.status === 'rejected' && fs.existsSync(fb)) out.push(`  leé ${fb}`);
+    }
+    for (const l of inboxLines(obra, id).slice(prevInbox)) out.push(`mensaje ${l.slice(2)}`);
+    return out;
+  };
+  const attention = (snap) => Object.values(snap.children).some(st => NEEDS_PARENT.has(st));
+  let snap = base;
+  // Primero: lo que ya está esperando al padre (hijos en done/blocked) se devuelve sin esperar.
+  if (attention(snap)) { console.log(`== ${id}: hijos que te esperan`); console.log(report(snap, snap.inbox).join('\n')); return; }
+  if (opt.once) { console.log(`== ${id}: sin novedades`); return; }
+  const deadline = t0 + timeout;
+  while (Date.now() < deadline) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, interval);
+    obra.registry = JSON.parse(fs.readFileSync(path.join(obra.dir, 'registry.json'), 'utf8'));
+    snap = snapshot(obra, id);
+    if (JSON.stringify(snap) !== JSON.stringify(base)) {
+      console.log(`== ${id}: novedades (${Math.round((Date.now() - t0) / 1000)}s)`);
+      console.log(report(snap, base.inbox).join('\n'));
+      return;
+    }
+  }
+  console.log(`== ${id}: sin novedades en ${Math.round(timeout / 1000)}s. Volvé a correr: sym wait ${id}`);
+}
+
+function cmdTell({ pos, opt }) {
+  const obra = loadObra(opt);
+  const to = pos[0] || fail('uso: sym tell <ID|humano> -m "mensaje" --from <tuID>');
+  if (to !== 'humano' && !obra.registry.nodes[to]) fail(`${to} no existe`);
+  const from = opt.from || process.env.SYMPHONY_NODE || 'humano';
+  if (!opt.m) fail('falta -m "mensaje"');
+  const line = `- ${now()} · de ${from}: ${String(opt.m).replace(/\n/g, ' ')}\n`;
+  fs.appendFileSync(inboxPath(obra, to), line);
+  fs.appendFileSync(path.join(obra.dir, 'events.jsonl'), JSON.stringify({ ts: now(), id: from, type: 'message', to, msg: opt.m }) + '\n');
+  if (to === 'humano' && hasWsh()) {
+    wsh(['notify', String(opt.m).slice(0, 120), '-t', `Symphony · ${from}`], { stdio: 'ignore' });
+    if (process.env.WAVETERM_BLOCKID) wsh(['badge', 'envelope', '--color', 'blue', '--priority', '12'], { stdio: 'ignore' });
+  }
+  console.log(`mensaje de ${from} para ${to} guardado en ${inboxPath(obra, to)}${to === 'humano' ? '' : ` (lo ve con sym wait ${to})`}`);
+}
+
+// ---------- tab: bloque de comandos para una pestaña de Wave ----------
+
+function cmdTab({ pos, opt }) {
+  const obra = loadObra(opt);
+  const id = pos[0] || fail('uso: sym tab <ID>');
+  const node = obra.registry.nodes[id] || fail(`${id} no existe`);
+  const lines = [`# ── Pestaña ${id}${node.title && node.title !== id ? ' · ' + node.title : ''} ─ pegá todo esto en un bloque de una pestaña nueva de Wave`,
+    `cd ${quoteArg(obra.dir)}`,
+    `sym board --wave --detach --focus ${id}`,
+    `${hasWsh() ? '' : '# '}wsh view ${quoteArg(path.relative(obra.dir, partPath(obra, id)))}`];
+  const launchLine = (nid) => {
+    const st = readPart(obra, nid).front.status;
+    if (['merged', 'cleaned', 'accepted'].includes(st)) return `# ${nid}: ya está ${st}`;
+    const problems = partReady(obra, nid);
+    return problems.length ? `# ${nid}: todavía no (${problems.join('; ')}) → cuando esté: sym launch ${nid} --wave` : `sym launch ${nid} --wave`;
+  };
+  lines.push(launchLine(id));
+  for (const c of node.children) lines.push(launchLine(c));
+  console.log(lines.join('\n'));
+}
+
 // ---------- Wave ----------
 
-function hasWsh() { return spawnSync('wsh', ['version'], { encoding: 'utf8' }).status === 0; }
+let _wsh;
+function wshBin() {
+  if (_wsh !== undefined) return _wsh;
+  const cands = ['wsh', path.join(os.homedir(), '.waveterm', 'bin', 'wsh')];
+  _wsh = cands.find(c => spawnSync(c, ['version'], { encoding: 'utf8' }).status === 0) || null;
+  return _wsh;
+}
+function hasWsh() { return !!wshBin(); }
+function wsh(args, opts = {}) { return spawnSync(wshBin(), args, { encoding: 'utf8', ...opts }); }
 function waveBadge(type, id) {
   if (!process.env.WAVETERM_BLOCKID || !hasWsh()) return;
   const badge = { waiting_human: ['triangle-exclamation', 'red', 20], blocked: ['flag', 'orange', 15], done: ['circle-check', 'green', 10], accepted: ['circle-check', 'green', 10], rejected: ['rotate', 'orange', 10], started: null, cleaned: null }[type];
   if (badge === undefined) return;
   const args = badge ? ['badge', badge[0], '--color', badge[1], '--priority', String(badge[2])] : ['badge', '--clear'];
-  spawnSync('wsh', args, { stdio: 'ignore' });
-  if (type === 'waiting_human') spawnSync('wsh', ['notify', `${id} espera una decisión tuya`, '-t', 'Symphony'], { stdio: 'ignore' });
+  wsh(args, { stdio: 'ignore' });
+  if (type === 'waiting_human') wsh(['notify', `${id} espera una decisión tuya`, '-t', 'Symphony'], { stdio: 'ignore' });
 }
 
 // ---------- main ----------
 
 const { pos, opt } = parseArgs(process.argv.slice(2));
 const cmd = pos.shift();
-const commands = { init: cmdInit, node: cmdNode, launch: cmdLaunch, event: cmdEvent, check: cmdCheck, merge: cmdMerge, blame: cmdBlame, status: cmdStatus, clean: cmdClean, doctor: cmdDoctor, score: cmdScore, board: cmdBoard };
+const commands = { init: cmdInit, node: cmdNode, launch: cmdLaunch, event: cmdEvent, check: cmdCheck, merge: cmdMerge, blame: cmdBlame, status: cmdStatus, clean: cmdClean, doctor: cmdDoctor, score: cmdScore, board: cmdBoard, wait: cmdWait, tell: cmdTell, tab: cmdTab };
 if (!cmd || !commands[cmd]) {
-  console.log(`sym — Symphony\n\n  init <obra> --repos a=/ruta,b=/ruta [--base main] [--root ./repertorio]\n  node create <padre> --kind atril|tutti|reparacion [--repos a,b] [--tier N] [--title ..] [--origin ID] [--depends A1.T1]\n  node show <ID>\n  launch <ID> [--exec | --wave [--magnified]] [--tier N] [--force]\n  event <ID> <tipo> [-m msg] [--approved]\n  check <ID>\n  merge <ID> [--force]\n  blame <repo>/<ruta>\n  status\n  clean <ID> | --all [--include-director]\n  score [--render | --open]      regenera score.archify.json (y score.html)\n  board [--wave]                  preview en vivo de archify; con --wave lo abre en un bloque web\n  doctor\n\nTodos aceptan --obra <ruta> (o SYMPHONY_OBRA); si no, se busca symphony.yaml hacia arriba desde el cwd.`);
+  console.log(`sym — Symphony\n\n  init <obra> --repos a=/ruta,b=/ruta [--base main] [--root ./repertorio]\n  node create <padre> --kind atril|tutti|reparacion [--repos a,b] [--tier N] [--title ..] [--origin ID] [--depends A1.T1]\n  node show <ID>\n  launch <ID> [--exec | --wave [--magnified]] [--tier N] [--force]\n  event <ID> <tipo> [-m msg] [--approved]\n  check <ID>\n  merge <ID> [--force]\n  blame <repo>/<ruta>\n  status\n  clean <ID> | --all [--include-director]\n  score [--render | --open]      regenera score.archify.json (y score.html)\n  board [--wave] [--focus ID] [--detach | --stop]   preview en vivo; --focus muestra solo el linaje de ID\n  wait <ID> [--timeout 100] [--once]   espera novedades de tus hijos, de tu estado o de tu inbox\n  tell <ID|humano> -m msg --from <tuID>   deja un mensaje en el inbox de otro nodo\n  tab <ID>                        bloque de comandos para abrir ese nodo y sus hijos en una pestaña de Wave\n  doctor\n\nTodos aceptan --obra <ruta> (o SYMPHONY_OBRA); si no, se busca symphony.yaml hacia arriba desde el cwd.`);
   process.exit(cmd ? 1 : 0);
 }
 commands[cmd]({ pos, opt });
