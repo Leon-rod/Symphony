@@ -2,7 +2,7 @@
 
 Orquestación jerárquica de agentes de código. Un **director** releva con vos y decide; **atriles** planifican y dividen; **tutti** ejecutan tareas chicas con los modelos más baratos que alcancen. Cada agente es un **nodo** con identidad fija, estado en disco (su *partichela*) y un worktree de git propio. Nada vive en el contexto del chat: si un nodo pierde el hilo, se relanza desde sus archivos y sigue.
 
-Funciona con Claude Code, Codex CLI y OpenCode (y cualquier runner que lea `AGENTS.md`), mezclados en la misma obra: un Opus de director, un Sonnet de atril, un Qwen local de tutti. Con Codex hace falta un ajuste de sandbox: ver [`runners/codex/README.md`](runners/codex/README.md).
+Funciona con Claude Code, Codex CLI y OpenCode (y cualquier runner que lea `AGENTS.md`), mezclados en la misma obra: un Opus de director, un Sonnet de atril, un Qwen local de tutti. Con Codex hace falta un ajuste de sandbox, y conviene sumarle un servidor de lenguaje (Serena) solo para los nodos que exploran: las dos cosas están en [`runners/codex/README.md`](runners/codex/README.md). Qué trae cada versión: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Instalación
 
