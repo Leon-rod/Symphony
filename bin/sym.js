@@ -287,7 +287,7 @@ function buildLaunch(obra, id, opt) {
   const cwd = wtPath(obra, id, front.repos[0]);
   // Sin comillas dobles en el prompt: es un solo argumento, pero si alguien lo copia a mano no debe romperse.
   const prompt = `Sos el nodo ${id} de la obra ${obra.cfg.obra}. Leé ${partPath(obra, id)} y seguí el procedimiento de arranque de un nodo del skill symphony.`.replace(/"/g, "'");
-  const vars = { model: tier.model, prompt, cwd, id, obra: obra.cfg.obra };
+  const vars = { model: tier.model, prompt, cwd, id, obra: obra.cfg.obra, obra_dir: obra.dir, repo_dir: obra.cfg.repos[front.repos[0]] };
   // Compatibilidad con templates viejos que traían "{prompt}" entre comillas.
   const tpl = String(runnerTpl).replace(/["']\{(\w+)\}["']/g, '{$1}');
   const argv = tokenize(tpl).map(tok => tok.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`)));
@@ -712,7 +712,7 @@ function cmdWait({ pos, opt }) {
   const obra = loadObra(opt);
   const id = pos[0] || fail('uso: sym wait <ID> [--timeout 100] [--interval 2] [--once]');
   if (!obra.registry.nodes[id]) fail(`${id} no existe`);
-  const timeout = Number(opt.timeout ?? 100) * 1000, interval = Number(opt.interval ?? 2) * 1000;
+  const timeout = Number(opt.timeout ?? process.env.SYMPHONY_WAIT_TIMEOUT ?? obra.cfg.wait_timeout ?? 100) * 1000, interval = Number(opt.interval ?? 2) * 1000;
   const t0 = Date.now();
   const base = snapshot(obra, id);
   const report = (snap, prevInbox) => {

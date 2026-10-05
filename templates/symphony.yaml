@@ -28,15 +28,24 @@ tiers:
     model: opus
     label: alto
 
-# Cómo se lanza cada runner. Placeholders: {model} {prompt} {cwd} {id} {obra}
+# Cómo se lanza cada runner. Placeholders: {model} {prompt} {cwd} {id} {obra} {obra_dir} {repo_dir}
 # NO pongas comillas alrededor de los placeholders: `sym` separa el template en argumentos y
 # cada placeholder se convierte en UN argumento, tenga espacios o comillas adentro.
 # `sym launch` imprime el comando resultante; con --exec lo ejecuta en {cwd}; con --wave lo abre en un bloque.
 # Ajustá los flags a la versión que tengas instalada de cada CLI (`claude --help`, etc.).
+#
+# Codex: su sandbox por defecto (workspace-write) solo deja escribir en el cwd y bloquea los .git,
+# y Symphony necesita escribir en la obra ({obra_dir}) y commitear en worktrees. Sin
+# `-s danger-full-access` ningún nodo Codex puede funcionar. El aislamiento lo ponen los worktrees,
+# el territorio y `sym check`, no el sandbox. Ver runners/codex/README.md para la alternativa con --add-dir.
 runners:
   claude-code: claude --model {model} {prompt}
-  codex: codex --model {model} {prompt}
+  codex: codex --model {model} -s danger-full-access {prompt}
   opencode: opencode --model {model} --prompt {prompt}
+
+# Segundos que `sym wait` espera antes de volver con "sin novedades". Bajalo si tu runner corta
+# los comandos antes (Claude Code: 120 s por defecto; Codex: probalo con `sym wait D --timeout 60`).
+wait_timeout: 100
 
 # Nivel por defecto con el que nace cada tipo de nodo si no se indica --tier.
 default_tier:
