@@ -1,27 +1,37 @@
 ---
 name: ensayo
-description: "Loop de trabajo de un nodo Symphony en modo execute: hacer la tarea dentro del territorio, autoverificar con sym check, mantener la partichela y reportar done o blocked. Usar cuando un nodo está en modo execute, cuando un tutti arranca o retoma, o cuando un nodo fue relanzado tras un rejected. Requiere el skill symphony."
+description: "Loop de trabajo de un nodo Symphony en modo execute: hacer la tarea dentro del territorio y del presupuesto de su tipo, autoverificar con sym check, mantener la partichela, reportar done o blocked y dormirse. Usar cuando un nodo está en modo execute, cuando un tutti arranca o retoma, o cuando fue relanzado tras un rejected. Requiere el skill symphony."
 ---
 
 # Ensayo
 
-Tu trabajo es cumplir los criterios de tu partichela, dentro de tu territorio, y nada más.
+Cumplís los criterios de tu partichela, dentro de tu territorio, con el presupuesto de tu tipo, y nada más.
+
+## Presupuesto por tipo
+
+El paquete de `sym node show` te lo imprime. Es un tope, no una meta:
+
+| tipo | archivos | cómo leés | explorar fuera de Ubicaciones | loop |
+|---|---|---|---|---|
+| `mecanica` | 2 | solo los rangos de Ubicaciones | no | editar → `sym diff` → `sym check` |
+| `local` | 4 | rangos primero; un archivo entero solo si lo vas a editar | no | leer → editar → `sym check` |
+| `transversal` | 8 | rangos y `grep` dentro del territorio | sí, dentro del territorio | leer → editar → `sym check` → ajustar |
+| `investigativa` | 15 | lo que haga falta dentro del territorio | sí | hipótesis → evidencia (bitácora) → cambio → `sym check` |
+
+Una consulta LSP (definición, referencias, símbolos) no cuenta como archivo leído; leer un rango sí. Si tu tipo no alcanza para hacer la tarea, no lo estires: escribí en "Estado actual" qué ubicación te falta, `sym event <ID> blocked -m "spec: faltan ubicaciones de X"` y dormí. Un `blocked` barato vale más que una exploración cara.
 
 ## Loop
 
-1. Si hay `feedback-<n>.md` para tu iteración actual, leelo primero y escribí en "Estado actual" qué vas a cambiar y qué no.
-2. Trabajá en tu worktree (`wt/<ID>/<repo>`). Commiteá seguido, con mensajes que digan qué criterio avanza (`AC-2: validar formato de mail`).
-3. Antes de cada commit grande y antes de reportar: `sym check <ID>`. Si falla por territorio, no toques el archivo: es un `blocked`. Si falla por patrón prohibido, corregilo. Si falla por criterio, seguí trabajando.
-4. Reescribí "Estado actual" después de cada paso del plan.
-5. Cuando `sym check` pasa completo: último commit, "Estado actual" con un resumen de lo hecho, y `sym event <ID> done -m "<una línea>"`. Después, `sym wait <ID>` en loop hasta que tu padre responda. Si vuelve con `accepted`, terminaste. Si vuelve con `rejected`, leé el `feedback-n.md` que te indica y volvé al paso 1. Si vuelve con un mensaje, leelo y seguí según diga. No toques código mientras esperás.
+1. Si el paquete trajo feedback, decidí primero qué cambiás y qué no, y escribilo en "Estado actual". Si te relanzaron a mitad de trabajo, `sym diff <ID> --stat` te dice qué ya hiciste; no vuelvas a leer lo que no vas a tocar.
+2. Trabajá en tu worktree. Commiteá por criterio (`AC-2: validar formato de mail`).
+3. Antes de reportar: `sym check <ID>`. Territorio → es `blocked`; patrón prohibido → corregilo; criterio → seguí.
+4. "Estado actual" después de cada paso (máximo 12 líneas: Hecho / Falta / Próximo paso / Dudas).
+5. `sym check` en verde: último commit, Estado actual final, `sym event <ID> done -m "<una línea>"`. **Terminá la sesión.** Si te rechazan, `sym conduct` te relanza con el feedback en el paquete.
 
 ## Blocked
 
-Marcá `blocked` cuando: necesitás tocar algo fuera de tu territorio, un contrato de tu partichela no se puede cumplir como está escrito, un criterio es imposible de satisfacer, o descubriste trabajo que no es tuyo. Antes de hacerlo, escribí en "Estado actual" exactamente qué encontraste, qué opciones ves y cuál recomendás; tu padre decide con eso. `sym event <ID> blocked -m "<una línea>"` y después `sym wait <ID>` en loop. Tu padre va a hacer una de tres cosas, y `sym wait` te lo muestra: cambiarte la partichela y relanzarte (`started`: releé la partichela entera y seguí), mandarte un mensaje con la respuesta, o dejarte en `waiting_human`. No intentes rodear el bloqueo, y no le pidas al humano que le avise a tu padre: tu `blocked` ya le llegó.
+Cuando necesitás tocar fuera del territorio, un contrato no se puede cumplir como está, un criterio es imposible, o descubriste trabajo que no es tuyo: Estado actual con qué encontraste, qué opciones ves y cuál recomendás; `sym event <ID> blocked -m "<una línea>"`; terminá la sesión. No rodees el bloqueo ni le pidas al humano que avise: tu `blocked` ya despierta a tu padre.
 
-## Lo que no hacés
+## No hacés
 
-- No corrés la suite completa. Solo tus criterios.
-- No escribís tests salvo que tu partichela lo diga (y entonces, con `TESTING.md` y su ejemplo canónico abiertos).
-- No tocás `CLAUDE.md`/`AGENTS.md` del worktree ni archivos de otros nodos.
-- No "mejorás" cosas fuera del alcance aunque las veas rotas. Anotalas en la bitácora para tu padre.
+Correr la suite completa ni tests a mano (solo `sym check`). Escribir tests salvo que tu partichela lo diga. Tocar `CLAUDE.md`/`AGENTS.md` ni archivos de otros nodos. Mejorar cosas fuera del alcance (anotalas en la bitácora). Quedarte en un loop de `sym wait` esperando: dormís.

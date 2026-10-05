@@ -10,25 +10,30 @@ repos:
 
 # Niveles de modelo, del más barato al más caro. `afinacion` sube de a un nivel.
 # `runner` tiene que existir en `runners`; `model` se inyecta en el comando como {model}.
+# `reasoning` entra al comando como {reasoning} (Codex: -c model_reasoning_effort={reasoning}).
 tiers:
   - id: 0
     runner: opencode
     model: qwen3.6-27b
+    reasoning: low
     label: local
   - id: 1
     runner: claude-code
     model: haiku
+    reasoning: low
     label: liviano
   - id: 2
     runner: claude-code
     model: sonnet
+    reasoning: medium
     label: medio
   - id: 3
     runner: claude-code
     model: opus
+    reasoning: high
     label: alto
 
-# Cómo se lanza cada runner. Placeholders: {model} {prompt} {cwd} {id} {obra} {obra_dir} {repo_dir}
+# Cómo se lanza cada runner. Placeholders: {model} {reasoning} {extra} {prompt} {cwd} {id} {obra} {obra_dir} {repo_dir}
 # NO pongas comillas alrededor de los placeholders: `sym` separa el template en argumentos y
 # cada placeholder se convierte en UN argumento, tenga espacios o comillas adentro.
 # `sym launch` imprime el comando resultante; con --exec lo ejecuta en {cwd}; con --wave lo abre en un bloque.
@@ -40,8 +45,20 @@ tiers:
 # el territorio y `sym check`, no el sandbox. Ver runners/codex/README.md para la alternativa con --add-dir.
 runners:
   claude-code: claude --model {model} {prompt}
-  codex: codex --model {model} -s danger-full-access {prompt}
+  codex: codex --model {model} -c model_reasoning_effort={reasoning} -s danger-full-access {extra} {prompt}
   opencode: opencode --model {model} --prompt {prompt}
+
+# Flags extra por tipo de nodo (si no hay tipo, por kind). Se expanden en {extra}.
+# Uso típico: herramientas LSP (Serena) solo para los nodos que exploran. Con Serena habilitado en
+# ~/.codex/config.toml, los tipos que no exploran lo apagan para no pagar su esquema en cada turno.
+launch_extra:
+  mecanica: -c mcp_servers.serena.enabled=false
+  local: -c mcp_servers.serena.enabled=false
+  transversal: ""
+  investigativa: ""
+  atril: ""
+  director: ""
+  reparacion: ""
 
 # Segundos que `sym wait` espera antes de volver con "sin novedades". Bajalo si tu runner corta
 # los comandos antes (Claude Code: 120 s por defecto; Codex: probalo con `sym wait D --timeout 60`).

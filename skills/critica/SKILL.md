@@ -1,35 +1,29 @@
 ---
 name: critica
-description: "Cómo un nodo padre Symphony evalúa a un hijo que marcó done: correr sym check, revisar el diff contra territorio y contratos, clasificar las fallas en categorías fijas y emitir accepted o rejected con feedback. Usar cuando un hijo está en done y el padre pasa a modo review. Requiere el skill symphony."
+description: "Cómo un nodo padre Symphony evalúa a un hijo que marcó done: sym check, sym diff, revisión contra territorio y contratos, clasificación de fallas en categorías fijas, veredicto accepted o rejected con feedback, y vuelta a dormir. Usar cuando un hijo está en done y el padre pasa a modo review. Requiere el skill symphony."
 ---
 
 # Crítica
 
-Evaluás contra lo que está escrito en la partichela del hijo. Lo que no está escrito no se evalúa; si te molesta algo que no está escrito, es un defecto de la partichela (categoría `spec`), no del hijo.
+Evaluás contra lo que está escrito en la partichela del hijo. Lo que no está escrito no se evalúa; si te molesta algo no escrito, es `spec`, y es tuyo.
 
 ## Procedimiento
 
-1. `sym check <hijo>`. Si falla, ya tenés al menos una falla clasificada: `criterion:<AC>`, `convention` (patrón prohibido) o `scope` (territorio).
-2. Leé el diff: `git -C wt/<hijo>/<repo> diff <tu rama>`. Buscá: contratos no respetados (`criterion` o `spec` según estén bien escritos), cambios fuera de alcance aunque dentro de territorio (`scope`), código que sugiere que no entendió el objetivo (`comprehension`).
-3. Si el hijo escribió tests: leé los archivos de test en el diff (no los corras aparte: `sym check` ya corrió los criterios). Verificá trazabilidad `// AC-n` en ambos sentidos, que cada test tenga un `expect` sobre el comportamiento y no sobre la implementación, y que no haya asserts existentes relajados. Lo que viole `TESTING.md` es `convention`.
-4. Leé su "Estado actual" y bitácora. Dudas o riesgos que anotó y no resolvió pueden ser `spec` tuyos.
-5. Veredicto.
+1. `sym check <hijo>`. Si falla, ya tenés fallas clasificadas: `criterion:<AC>`, `convention` (patrón prohibido) o `scope` (territorio).
+2. `sym diff <hijo> --stat`, y después `sym diff <hijo>` solo si el stat no te alcanza. No abras los archivos del hijo enteros: el diff es la evidencia. Buscá contratos no respetados (`criterion` o `spec`, según cómo estaban escritos), cambios fuera de alcance aunque dentro de territorio (`scope`), código que indica que no entendió el objetivo (`comprehension`).
+3. Si escribió tests, leelos en el diff: trazabilidad `// AC-n` en ambos sentidos, `expect` sobre comportamiento y no sobre implementación, ningún assert existente relajado. Lo que viole `TESTING.md` es `convention`.
+4. El paquete ya trajo su Estado actual: dudas que anotó y no resolvió pueden ser `spec` tuyos.
 
 ## Veredicto
 
-**accepted** si `sym check` pasa, los contratos se respetan y no hay fallas. Agregá a `evaluaciones` del hijo `{iteration, met: total, total, fallas: []}` y `sym event <hijo> accepted`.
+**accepted**: `sym check` pasa, contratos respetados, sin fallas. `evaluaciones` del hijo: `{iteration, met: total, total, fallas: []}`. `sym event <hijo> accepted`.
 
-**rejected** en cualquier otro caso. Escribí `feedback-<n>.md` (formato en el skill `partichela`), agregá la entrada en `evaluaciones` con las fallas clasificadas, y `sym event <hijo> rejected -m "<categorías separadas por coma>"`. Después consultá `afinacion` antes de relanzar.
+**rejected**: `feedback-<n>.md` (máximo 20 líneas: fallas clasificadas, qué cambiar en orden, qué no tocar; formato en `partichela`), entrada en `evaluaciones`, `sym event <hijo> rejected -m "<categorías>"`. Antes de que lo relancen, `afinacion` decide si sube de tier. Si la falla es `spec`, corregís su partichela (ubicaciones, contratos, criterios) **antes** del `rejected`, y no cuenta como falla del modelo.
 
-En los dos casos, después del veredicto volvés a `sym wait <tuID>`: el hijo rechazado está esperando tu `rejected` para releer el feedback y seguir; no hace falta avisarle nada más.
+Después del veredicto: si quedan hijos activos, Estado actual y `sym event <tuID> sleep`; si todos están `accepted`, `lirico` a `integrate`.
 
-Si la falla es `spec`: corregí la partichela del hijo (Objetivo, Contratos, Criterios, lo que haya estado mal) **antes** de relanzarlo, y decilo en el feedback. No cuentes `spec` como falla del modelo.
+Categorías, siempre estas: `spec` · `scope` · `criterion:<AC-id>` · `convention` · `comprehension`.
 
-## Categorías (fijas)
+## No hacés
 
-`spec` · `scope` · `criterion:<AC-id>` · `convention` · `comprehension`. Usá siempre estas; `afinacion` las lee mecánicamente.
-
-## Lo que no hacés
-
-- No arreglás vos el código del hijo. Si es más rápido hacerlo que explicarlo, igual explicalo: estás entrenando la partichela para la próxima.
-- No pedís cambios que no se desprendan de un criterio, un contrato o `TESTING.md`.
+Arreglar vos el código del hijo (explicalo: estás entrenando la partichela). Pedir cambios que no salgan de un criterio, un contrato o `TESTING.md`. Correr la suite completa.

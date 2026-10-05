@@ -31,6 +31,20 @@ tiers:
   - { id: 3, runner: codex, model: <modelo-grande-de-codex>, label: alto }
 ```
 
+## LSP (Serena) solo donde sirve
+
+Un servidor de lenguaje le da al agente "ir a definición", "referencias" y "símbolos de un archivo" con rangos exactos: es lo que los atriles necesitan para escribir **Ubicaciones** sin `grep` ni `cat`. Serena (`github.com/oraios/serena`) lo expone por MCP y corre con Codex; para Angular cubre el lado `.ts`, no los templates.
+
+Habilitalo una vez en `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.serena]
+command = "uvx"
+args = ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--context", "codex"]
+```
+
+Y dejá que `launch_extra` de `symphony.yaml` lo apague en los tipos que no exploran (`mecanica`, `local`): cada servidor MCP mete el esquema de todas sus herramientas en el contexto de cada turno, y un tutti mecánico no debe pagarlo. Verificá en tu versión que la clave sea `enabled`; si Codex la rechaza, usá un perfil (`--profile`) con y otro sin Serena.
+
 ## `sym wait` y el límite de tiempo por comando
 
 `sym wait` bloquea hasta `wait_timeout` segundos (100 por defecto). Si Codex corta el comando antes, el nodo ve un error en vez de "sin novedades". Probá una vez `sym wait D --timeout 60` desde un nodo Codex: si lo corta, bajá `wait_timeout` en `symphony.yaml` hasta un valor que aguante.

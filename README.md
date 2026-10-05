@@ -32,7 +32,7 @@ Para la introducción completa, pedile a cualquier agente con los skills instala
 ```
 skills/        un SKILL.md por fase: symphony (constitución), preludio, relevamiento, partitura,
                partichela, arreglo, lirico, ensayo, critica, afinacion, ensamble, curtain-call
-bin/sym.js     operaciones mecánicas: init, node create, launch, tab, event, wait, tell, check, merge, blame, status, score, board, clean, doctor
+bin/sym.js     operaciones mecánicas: init, node create/show, launch, tab, event, wait, tell, conduct, check, diff, merge, blame, status, score, board, cost, clean, doctor
 templates/     partichela.md, symphony.yaml, TESTING.md, identidad (CLAUDE.md / AGENTS.md)
 runners/       notas y hooks opcionales por runner
 examples/      una obra mínima recorrida paso a paso
@@ -46,7 +46,9 @@ examples/      una obra mínima recorrida paso a paso
 - **Criterios, no opiniones.** Aceptar es correr comandos que salen en 0.
 - **Lo mecánico lo hace `sym`.** IDs, ramas, worktrees, estados, límites.
 - **Subir de modelo es relanzar.** Mismo nodo, mismo estado, modelo más capaz, con datos que lo justifiquen.
-- **El humano no es mensajero.** Los nodos se hablan con `sym tell` y se esperan con `sym wait`.
+- **El humano no es mensajero.** Los nodos se hablan con `sym tell`; `sym conduct` los despierta.
+- **Nadie espera despierto.** Un turno de espera cuesta todo el contexto; dormir cuesta cero.
+- **El padre ubica, el hijo no explora.** Ubicaciones exactas y un tipo con presupuesto de lectura en cada partichela.
 
 ## Con Wave Terminal
 
@@ -58,7 +60,7 @@ sym board --wave --focus A1 --detach   # diagrama en vivo del linaje de A1, en u
 sym launch A1.T1 --wave        # abre el runner del nodo en un bloque nuevo (wsh run --cwd ...)
 ```
 
-Los nodos no se despiertan entre sí: cada uno corre `sym wait <ID>` cuando no tiene nada que hacer, y vuelve cuando un hijo termina o se bloquea, cuando el padre lo relanza, o cuando llega un mensaje por `sym tell`. Vos no sos el cartero.
+Los nodos no esperan despiertos: cuando no tienen nada que hacer se duermen (terminan su sesión), y `sym conduct --focus <ID>`, un proceso sin modelo que corre en la pestaña de cada linaje, los relanza cuando un hijo termina o se bloquea, cuando los rechazan, o cuando les llega un mensaje por `sym tell`. Vos no sos el cartero.
 
 Cuando `sym event` corre dentro de un bloque de Wave, pone un badge en el bloque (`waiting_human` rojo, `blocked` naranja, `done` verde) y manda una notificación de escritorio si un nodo te espera a vos.
 

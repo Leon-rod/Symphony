@@ -9,6 +9,7 @@ mode: {{mode}}              # plan | execute | review | integrate | done
 status: planned             # ver protocolo de estados en el skill symphony
 iteration: 1
 tier: {{tier}}              # índice en tiers de symphony.yaml; afinacion lo sube
+tipo: {{tipo}}              # mecanica | local | transversal | investigativa: fija el presupuesto de lectura y el loop (lo pone el padre)
 tier_history: [{{tier}}]
 repos: {{repos}}
 branch: {{branch}}
@@ -53,11 +54,17 @@ evaluaciones: []
 ## Contratos
 <!-- Interfaces, tipos, endpoints o firmas que este nodo debe respetar. Si comparte interfaz con un hermano, el padre la escribe acá ANTES de lanzar a ambos. -->
 
+## Ubicaciones
+<!-- OBLIGATORIO en tutti (salvo tipo investigativa). Lo escribe el padre con lo que YA leyó, para que el hijo no vuelva a explorar.
+     Una línea por lugar: repo:ruta:líneas · símbolo · qué hay ahí / qué hacer.
+     api:src/auth/session.service.ts:40-88 · SessionService.refresh() · acá se renueva el token; cambiar el TTL
+     web:src/app/login/login.component.ts:12-30 · submit() · llama a auth.login(); agregar validación previa -->
+
 ## Contexto
-<!-- Lo mínimo que un modelo recién lanzado necesita saber del sistema para hacer esta tarea. Rutas, decisiones previas, enlaces a brief.md. No pegues código entero: señalá dónde mirar. -->
+<!-- Decisiones del brief que aplican y convenciones del repo. Breve. Lo que sea una ubicación va arriba, no acá. -->
 
 ## Estado actual
-<!-- LO REESCRIBE EL NODO después de cada acción significativa. Es lo primero que leés al relanzar. Debe responder: qué hice, qué falta, qué estaba por hacer, qué dudas tengo. -->
+<!-- LO REESCRIBE EL NODO después de cada acción significativa. Máximo 12 líneas. Es lo primero que leés al relanzar: Hecho / Falta / Próximo paso / Dudas o riesgos. -->
 Sin empezar.
 
 ## Bitácora

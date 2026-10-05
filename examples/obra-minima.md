@@ -15,13 +15,15 @@ sym launch D --wave              # o --exec si no estás en Wave
 # 2. El atril
 sym launch A1 --exec
 #   → `arreglo`: crea dos hijos, con el segundo dependiendo del primero
-#       sym node create A1 --kind tutti --title "validate()"      --tier 1
-#       sym node create A1 --kind tutti --title "tests validate" --tier 0 --depends A1.T1
-#     completa territorio, contratos, criterios y objetivo de cada uno.
+#       sym node create A1 --kind tutti --title "validate()"      --tier 1 --tipo local
+#       sym node create A1 --kind tutti --title "tests validate" --tier 0 --tipo mecanica --depends A1.T1
+#     completa territorio, contratos, criterios, UBICACIONES y objetivo de cada uno,
+#     lanza (--wave) o te muestra `sym tab A1`, y se duerme: sym event A1 sleep
 
 # 3. El tutti implementador (bloque aparte)
 sym launch A1.T1 --exec
-#   → `ensayo`: trabaja en wt/A1.T1/api, commitea, `sym check A1.T1`, `sym event A1.T1 done`
+#   → `ensayo`: lee solo las Ubicaciones, edita, `sym check A1.T1`, `sym event A1.T1 done`, y se cierra.
+#     `sym conduct --focus A1` (corriendo en la pestaña) relanza a A1 para que evalúe.
 
 # 4. El atril evalúa, integra, y recién ahí se puede lanzar el tester
 #   → `critica`: sym check A1.T1 + diff → sym event A1.T1 accepted
@@ -38,6 +40,7 @@ sym board --wave                 # diagrama en vivo; cada sym event lo actualiza
 #   → el atril mergea A1.T2, corre sus criterios, done.
 #   → el director mergea A1, corre la suite completa, abre el PR.
 sym status
+sym cost                         # tokens por nodo y por tier
 sym clean --all                  # curtain-call, cuando el PR esté mergeado
 ```
 

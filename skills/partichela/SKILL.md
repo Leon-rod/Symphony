@@ -1,21 +1,19 @@
 ---
 name: partichela
-description: "Cómo un nodo Symphony lee, escribe y mantiene su partichela (archivo de estado) y las de sus hijos, incluyendo el checkpoint de 'Estado actual', la bitácora y el procedimiento para relanzar un nodo desde cero con solo su ID. Usar cada vez que un nodo arranca, retoma después de perder contexto, o tiene que registrar progreso. Requiere el skill symphony."
+description: "Cómo un nodo Symphony lee, escribe y mantiene su partichela (archivo de estado) y las de sus hijos: el paquete de arranque de sym node show, el checkpoint de Estado actual, la bitácora, el inbox y el formato de feedback. Usar cada vez que un nodo arranca, retoma, o tiene que registrar progreso o rechazar a un hijo. Requiere el skill symphony."
 ---
 
 # Partichela
 
-La partichela es tu única memoria. El skill `symphony` dice *que* hay que mantenerla; este dice *cómo*.
+La partichela es tu única memoria. `symphony` dice *que* hay que mantenerla; este dice *cómo*.
 
-## Al arrancar
+## Leer
 
-Seguí "Arranque de un nodo" de `symphony`. Lo que leés, en orden: tu partichela, `symphony.yaml`, tus `feedback-*.md` (el último manda), las partichelas de tus hijos directos. Después `sym event <ID> started`.
+`sym node show <ID>` es la única lectura que hacés al arrancar. Trae lo que aplica y nada más; el archivo crudo (`--raw`) existe para editarlo, no para leerlo. Si el paquete dice `status planned` y Estado actual no aparece, sos nuevo: leé Objetivo, Contratos, Ubicaciones y Contexto del paquete, y escribí tu plan en Estado actual **antes** de tocar código. Si hay Estado actual, retomá desde ahí.
 
-Si "Estado actual" dice "Sin empezar", sos nuevo: tu primer trabajo es leer Objetivo, Alcance, Contratos y Contexto, y escribir en "Estado actual" tu plan en tres a seis líneas antes de tocar código. Si dice otra cosa, retomá exactamente desde ahí.
+## Estado actual
 
-## Checkpoint: "Estado actual"
-
-Reescribilo (no lo apendees) después de cada acción significativa: terminar un paso del plan, tomar una decisión, encontrar un bloqueo, antes de correr `sym check`. Tiene que responder cuatro preguntas en presente:
+Reescribilo (no apendees) después de cada acción significativa. Máximo 12 líneas, presente, cuatro preguntas:
 
 ```
 ## Estado actual
@@ -25,34 +23,31 @@ Próximo paso: ...
 Dudas o riesgos: ...
 ```
 
-Prueba de calidad: si te mataran ahora y te relanzaran, ¿con esto seguirías sin volver a explorar? Si no, le falta algo.
+Prueba: si te relanzaran ahora con solo esto, ¿seguirías sin volver a explorar? Si no, le falta algo.
 
 ## Bitácora
 
-Append-only, una línea por hecho, con fecha ISO. `sym event` ya agrega líneas por vos; vos agregás decisiones y por qué. Nunca borres ni edites líneas anteriores.
+Append-only, una línea por hecho, con fecha. `sym event` ya agrega líneas; vos agregás decisiones y por qué.
 
 ## Frontmatter
 
-- Lo que es tuyo para editar: `mode` (vía `lirico`), `territorio`, `criterios` y `evaluaciones` **de tus hijos**, `depends_on` de tus hijos al crearlos.
-- Lo que no tocás nunca: `id`, `obra`, `parent`, `kind`, `branch`, `created_at`, `children`, `status`, `iteration`, `tier`, `tier_history`. Eso lo escribe `sym`.
-- Mantené el YAML válido. Si dudás, `sym node show <ID>` lo parsea y te avisa.
+Tuyo para editar: `mode` (vía `lirico`); de tus hijos: `territorio`, `criterios`, `tipo`, `depends_on`, `evaluaciones`. Nunca: `id`, `obra`, `parent`, `kind`, `branch`, `created_at`, `children`, `status`, `iteration`, `tier`, `tier_history`. YAML válido siempre; `sym node show` te avisa si se rompió.
 
 ## Inbox
 
-`nodes/<ID>/inbox.md` es donde `sym tell` deja los mensajes que te mandan. No lo editás: lo leés al arrancar y cada vez que `sym wait` te avisa que hay algo nuevo. Para contestar usás `sym tell <quien> -m "..." --from <tuID>`.
+`nodes/<ID>/inbox.md` lo escribe `sym tell`; el paquete te muestra solo lo nuevo. Contestás con `sym tell <quien> -m "..." --from <tuID>`.
 
 ## Feedback a un hijo
 
-Al rechazar: escribí `nodes/<hijo>/feedback-<n>.md` (n = iteración actual del hijo), agregá la entrada en `evaluaciones` de su frontmatter, y recién después `sym event <hijo> rejected -m "<categorías>"`. El orden importa: el hijo relanzado lee el feedback antes de ver el estado.
+Antes del `sym event <hijo> rejected`: escribí `nodes/<hijo>/feedback-<n>.md` (n = su iteración actual) y la entrada en `evaluaciones`. Máximo 20 líneas:
 
 ```
 # Feedback <n> · <hijo>
-## Veredicto: rejected
 ## Fallas
-- criterion:AC-3 — <qué falló, salida relevante del comando>
-- convention — <qué regla de TESTING.md y dónde>
-## Qué cambiar
-<instrucciones concretas, en orden>
+- criterion:AC-3 — <qué falló, las 3 líneas relevantes de la salida>
+- convention — <regla de TESTING.md y dónde>
+## Qué cambiar (en orden)
 ## Qué NO cambiar
-<lo que ya estaba bien; evita que lo rompa al iterar>
 ```
+
+Si agregás ubicaciones o corregís contratos (falla `spec`), va en su partichela, no en el feedback: el feedback dice "releé Ubicaciones".

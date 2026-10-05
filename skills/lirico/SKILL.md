@@ -31,3 +31,5 @@ Cualquier otra transición no existe. En particular: `execute` nunca va a `plan`
 6. Cargá el skill del nuevo modo y seguí.
 
 El director usa `lirico` igual que cualquier nodo, pero nunca entra en `execute` (regla 4).
+
+Cambiar de modo no es motivo para quedarse despierto: si el nuevo modo no tiene trabajo inmediato (por ejemplo `review` sin hijos en `done` todavía), `sym event <ID> sleep`.

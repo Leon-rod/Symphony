@@ -1,57 +1,52 @@
 ---
 name: arreglo
-description: "Cómo un atril Symphony en modo plan divide su área en tareas y crea nodos hijos (tutti o sub-atriles) con territorio disjunto, contratos, criterios verificables, dependencias y nivel de modelo. Usar cuando un nodo en modo plan tiene que delegar, cuando recibe un blocked de un hijo y debe replanificar, o cuando el director le pide dividir. Requiere el skill symphony."
+description: "Cómo un atril Symphony en modo plan divide su área en tareas y crea nodos hijos (tutti o sub-atriles) con territorio disjunto, contratos, criterios verificables, ubicaciones exactas, tipo, dependencias y nivel de modelo; cómo los lanza y cómo se duerme. Usar cuando un nodo en modo plan tiene que delegar, cuando recibe un blocked de un hijo, o cuando el director le pide dividir. Requiere el skill symphony."
 ---
 
 # Arreglo
 
-Dividir es la decisión más cara de la obra: cada hijo es un modelo lanzado, un worktree y una rama. Dividí lo justo.
+Dividir es la decisión más cara de la obra: cada hijo es un modelo lanzado, un worktree y una rama. Y lo que vos ya leíste para decidir, el hijo no tiene por qué volver a leerlo: por eso cada hijo nace con **ubicaciones**, no con "mirá `src/auth`".
 
 ## Antes de dividir
 
-Preguntate, en este orden:
+1. ¿Lo hacés vos en una sesión, dentro de tu territorio? `lirico` a `execute`, sin hijos.
+2. ¿Hay partes con territorio disjunto que avancen en paralelo? Dividí por eso.
+3. ¿Hay partes que un modelo barato hace bien si la tarea está muy bien escrita? Dividí por eso, y escribila muy bien.
+4. ¿Hay partes secuenciales? `depends_on`; `sym` no lanza un hijo con dependencias sin mergear.
 
-1. ¿Puedo hacerlo yo en una sesión, dentro de mi territorio? Entonces `lirico` a `execute` y no dividas.
-2. ¿Hay partes con territorio disjunto que puedan avanzar en paralelo? Dividí por eso.
-3. ¿Hay partes que un modelo barato puede hacer bien si la tarea está muy bien especificada? Dividí por eso, y especificá muy bien.
-4. ¿Hay partes secuenciales? Dividí igual pero con `depends_on`; `sym` no lanza un hijo hasta que su dependencia esté `merged`.
-
-Si no podés escribir territorio disjunto y un criterio verificable para cada hijo, no estás listo para dividir: te falta entender el problema. Explorá más o marcá `waiting_human` con la duda.
+Si no podés escribir territorio disjunto, un criterio y ubicaciones para cada hijo, no estás listo: te falta entender el problema.
 
 ## Contratos primero
 
-Si dos hijos van a compartir una interfaz (un tipo, un endpoint, un evento, una firma), la definís vos, completa, en la sección Contratos de ambos, **antes** de crearlos. Un tutti no negocia interfaces con un hermano: no lo ve.
+Si dos hijos comparten una interfaz, la escribís vos, completa, en los Contratos de ambos, antes de crearlos. Un tutti no ve a su hermano.
 
 ## Cada hijo nace completo
 
-`sym node create <tuID> --kind tutti|atril --repos <subset> [--tier N] [--depends ...] --title "..."` y después completás su partichela. `sym launch` se niega si falta algo. Lo que tiene que tener:
+`sym node create <tuID> --kind tutti|atril --repos <subset> --tipo <tipo> [--tier N] [--depends ...] --title "..."` y completás su partichela. `sym launch` se niega si falta algo:
 
 - **Objetivo**: una o dos frases, en términos de resultado observable.
-- **Por qué se divide**: una línea. Si no te sale, revisá el punto 1.
-- **Alcance y fuera de alcance**: lo segundo es lo más importante para modelos chicos.
+- **Por qué se divide**: una línea.
+- **Alcance y fuera de alcance**: lo segundo es lo que más ayuda a un modelo chico.
 - **Contratos**: completos, con tipos.
-- **Contexto**: qué archivos mirar, qué decisiones del brief aplican, qué convenciones del repo. Señalá, no pegues.
-- **Territorio**: globs por repo, disjuntos de los hermanos. Verificá a mano que no se solapen.
-- **Criterios**: comandos. Como mínimo lint o build del territorio y una verificación del comportamiento. Nada que requiera correr la suite entera (regla 7).
-- **Tier**: el más bajo que creas suficiente. Guía: tareas mecánicas y bien delimitadas, nivel 0 o 1; tareas que requieren decidir diseño dentro del territorio, nivel 2; nunca nivel 3 para un tutti sin pasar por `afinacion`.
+- **Ubicaciones**: una línea por lugar, `repo:ruta:líneas · símbolo · qué hay ahí / qué hacer`, con los rangos que vos ya tenés en contexto. Obligatorias salvo tipo `investigativa`. Es la sección que más tokens ahorra en toda la obra: cada línea que escribís evita que el hijo explore. Si tenés herramientas LSP (símbolos de un archivo, referencias de un símbolo), usalas para esto antes que `grep` y `cat`: devuelven exactamente ruta, rango y símbolo.
+- **Contexto**: decisiones del brief y convenciones. Breve; lo que sea una ubicación va arriba.
+- **Territorio**: globs por repo, disjuntos de los hermanos.
+- **Criterios**: comandos, de su territorio, nunca la suite entera.
+- **Tipo**: el loop que le permitís. `mecanica` (cambio literal, ≤2 archivos), `local` (un componente, ≤4), `transversal` (varios archivos con contrato, ≤8, puede explorar en su territorio), `investigativa` (causa desconocida, ≤15). Empezá por el más chico que creas suficiente: si el hijo vuelve `blocked` con `spec`, le agregás ubicaciones o le subís el tipo.
+- **Tier**: el más bajo que creas suficiente. Guía: `mecanica`/`local` bien escritas, tier 0 o 1; decisiones de diseño dentro del territorio, tier 2; tier 3 solo vía `afinacion`.
 
-Sub-atril en vez de tutti cuando el área hija todavía no se puede bajar a tareas con criterio. El sub-atril hará su propio `arreglo`.
+Sub-atril en vez de tutti cuando el área hija todavía no baja a tareas con criterio.
 
 ## Tests
 
-No le pidas a un tutti implementador que escriba tests. Si el área necesita tests, creá un hijo de tests aparte, con `depends_on` sobre el implementador, territorio solo de `*.spec.*` (o el patrón del repo), y Contexto que apunte al `TESTING.md` del repo y a los criterios del implementador.
+No le pidas al implementador que escriba tests. Si hacen falta, un hijo aparte con `depends_on` sobre el implementador, territorio solo de `*.spec.*`, y Contexto que apunte a `TESTING.md` y a los criterios del implementador.
 
-## Cuando un hijo marca blocked
+## Lanzar y dormir
 
-`sym wait` ya te trajo su "Estado actual" con lo que encontró y lo que recomienda. Decidí una de tres: ajustar su partichela y relanzarlo (`sym event <hijo> started -m "<qué cambió>"`; si solo necesita una aclaración, `sym tell <hijo> -m "..." --from <tuID>` y después el `started`), crear un hermano nuevo que resuelva lo descubierto (con `depends_on` si corresponde), o marcar `waiting_human` si lo descubierto cambia el alcance de tu área. Registralo en tu bitácora y volvé a `sym wait`.
+No tenés terminal interactiva: no podés correr `sym launch <hijo> --exec`. Si estás en un bloque de Wave (`sym doctor` muestra `wsh`), `sym launch <hijo> --wave`. Si no, `sym tab <tuID>` y mostrale la salida al humano tal cual; él la pega en una pestaña. Nada más: ni instrucciones aparte ni mensajes para llevar.
 
-## Lanzar a los hijos
+Con los hijos lanzados, `sym event <tuID> checkpoint -m "arreglo: N hijos"`, Estado actual al día, `sym event <tuID> sleep` y **terminá la sesión**. `sym conduct` te relanza cuando un hijo marque `done` (vas a `critica`) o `blocked` (abajo), o cuando te escriban. Si esperás algo en segundos, `sym wait <tuID>` una vez; nunca en loop.
 
-Vos no tenés terminal interactiva, así que no podés correr `sym launch <hijo> --exec` (el runner interactivo no puede abrirse adentro tuyo). Dos caminos:
+## Cuando un hijo vuelve blocked
 
-- Si estás dentro de un bloque de Wave (`sym doctor` muestra `wsh`), `sym launch <hijo> --wave` abre al hijo en un bloque nuevo de tu misma pestaña.
-- Si no, o si el humano prefiere una pestaña por atril: corré `sym tab <tuID>` y mostrale la salida tal cual. Es un bloque de comandos que él pega en una pestaña nueva y abre tu tablero enfocado, tu partichela y tus hijos. Eso es todo lo que le pedís: no le dictes mensajes ni instrucciones aparte.
-
-En cuanto haya hijos lanzados, entrás al loop: `sym wait <tuID>` → leer qué volvió → actuar → `sym wait <tuID>`. Un hijo `done` te manda a `critica`; un hijo `blocked`, a la sección de abajo; un mensaje, a leerlo. No salgas del loop hasta que todos tus hijos estén `merged`.
-
-Al terminar de dividir: `sym event <tuID> checkpoint -m "arreglo: N hijos"` y pasá a `review` con `lirico` cuando el primero marque `done`.
+El paquete ya te trae su Estado actual. Una de tres: ajustar su partichela (casi siempre: ubicaciones que faltaban, o subir el tipo) y `sym event <hijo> started -m "<qué cambió>"`; crear un hermano que resuelva lo descubierto; o `waiting_human` si cambia el alcance de tu área. Bitácora, y a dormir.

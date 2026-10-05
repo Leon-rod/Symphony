@@ -16,8 +16,10 @@ const KIND_MODE = { atril: 'plan', tutti: 'execute', reparacion: 'execute', dire
 const EVENT_STATUS = {
   spawned: 'planned', started: 'in_progress', checkpoint: null, blocked: 'blocked',
   waiting_human: 'waiting_human', done: 'done', accepted: 'accepted', rejected: 'rejected',
-  upgraded: 'in_progress', merged: 'merged', cleaned: 'cleaned', message: null,
+  upgraded: 'in_progress', merged: 'merged', cleaned: 'cleaned', message: null, sleep: null,
 };
+// Un nodo está despierto (tiene sesión viva) entre `started` y el siguiente de estos eventos.
+const SLEEP_EVENTS = new Set(['sleep', 'done', 'blocked', 'waiting_human', 'accepted', 'merged', 'cleaned']);
 
 // ---------- utilidades ----------
 
@@ -153,6 +155,8 @@ function logEvent(obra, id, type, msg, extra = {}) {
     setFront(obra, id, 'status', status);
     obra.registry.nodes[id].status = status;
   }
+  if (type === 'started') obra.registry.nodes[id].awake = true;
+  else if (SLEEP_EVENTS.has(type)) obra.registry.nodes[id].awake = false;
   saveRegistry(obra);
   writeScore(obra);
   waveBadge(type, id);
@@ -194,13 +198,13 @@ function cmdInit({ pos, opt }) {
   console.log(`siguiente paso: revisá symphony.yaml y lanzá el director con: sym launch D --obra ${dir}`);
 }
 
-function createNodeFiles(obra, id, { kind, parent, repos, tier, title, origin, fromBranch, dependsOn = [] }) {
+function createNodeFiles(obra, id, { kind, parent, repos, tier, title, origin, fromBranch, dependsOn = [], tipo = null }) {
   const ts = now();
   fs.mkdirSync(nodeDir(obra, id), { recursive: true });
   const tpl = fs.readFileSync(path.join(TEMPLATES, 'partichela.md'), 'utf8');
   fs.writeFileSync(partPath(obra, id), fill(tpl, {
     id, obra: obra.cfg.obra, parent: parent ?? 'null', kind, mode: KIND_MODE[kind], tier, repos: `[${repos.join(', ')}]`,
-    branch: branchOf(obra, id), origin: origin || 'null', created_at: ts, title: title || id,
+    branch: branchOf(obra, id), origin: origin || 'null', created_at: ts, title: title || id, tipo: tipo || 'null',
   }));
   if (dependsOn.length) setFront(obra, id, 'depends_on', `[${dependsOn.join(', ')}]`);
   const worktrees = {};
@@ -213,8 +217,8 @@ function createNodeFiles(obra, id, { kind, parent, repos, tier, title, origin, f
 
 function cmdNode({ pos, opt }) {
   const sub = pos[0];
-  if (sub === 'show') { const part = readPart(loadObra(opt), pos[1] || fail('uso: sym node show <ID>')); console.log(part.text); return; }
-  if (sub !== 'create') fail('uso: sym node create <padre> --kind atril|tutti|reparacion --repos api[,web] [--tier N] [--title "..."] [--origin ID] [--depends A1.T1,A1.T2]');
+  if (sub === 'show') { cmdShow({ pos: pos.slice(1), opt }); return; }
+  if (sub !== 'create') fail('uso: sym node create <padre> --kind atril|tutti|reparacion --repos api[,web] [--tier N] [--tipo mecanica|local|transversal|investigativa] [--title "..."] [--origin ID] [--depends A1.T1,A1.T2]');
   const obra = loadObra(opt);
   const parentId = pos[1] || fail('falta el ID del padre');
   const parent = obra.registry.nodes[parentId] || fail(`el padre ${parentId} no existe`);
@@ -243,7 +247,8 @@ function cmdNode({ pos, opt }) {
   if (!obra.cfg.tiers.some(t => t.id === tier)) fail(`tier ${tier} no existe en symphony.yaml`);
   const dependsOn = opt.depends ? String(opt.depends).split(',').map(s => s.trim()) : [];
   for (const d of dependsOn) if (!parent.children.includes(d)) fail(`dependencia ${d} no es hermano de ${id}`);
-  createNodeFiles(obra, id, { kind, parent: parentId, repos, tier, title: opt.title, origin: opt.origin, fromBranch: parent.branch, dependsOn });
+  if (opt.tipo && !TIPOS[opt.tipo]) fail(`tipo inválido: ${opt.tipo} (${Object.keys(TIPOS).join('|')})`);
+  createNodeFiles(obra, id, { kind, parent: parentId, repos, tier, title: opt.title, origin: opt.origin, fromBranch: parent.branch, dependsOn, tipo: opt.tipo });
   console.log(`nodo ${id} creado · partichela: ${partPath(obra, id)}`);
   console.log(`completá Objetivo, Territorio, Contratos y Criterios antes de: sym launch ${id}`);
 }
@@ -253,6 +258,11 @@ function partReady(obra, id) {
   const problems = [];
   if (!front.territorio?.length && front.kind !== 'director') problems.push('territorio vacío');
   if (!front.criterios?.length && front.kind !== 'director') problems.push('criterios vacíos');
+  if (front.kind === 'tutti' || front.kind === 'reparacion') {
+    if (!TIPOS[front.tipo]) problems.push(`tipo inválido o vacío (${Object.keys(TIPOS).join('|')})`);
+    const ubi = sectionOf(text, 'Ubicaciones');
+    if (!ubi && front.tipo !== 'investigativa') problems.push('Ubicaciones vacías (obligatorias salvo tipo investigativa)');
+  }
   const obj = text.split('## Objetivo')[1]?.split('##')[0]?.replace(/<!--[\s\S]*?-->/g, '').trim();
   if (!obj && front.kind !== 'director') problems.push('Objetivo vacío');
   for (const d of front.depends_on || []) {
@@ -286,11 +296,13 @@ function buildLaunch(obra, id, opt) {
   const runnerTpl = obra.cfg.runners?.[tier.runner] || fail(`runner "${tier.runner}" no definido en symphony.yaml`);
   const cwd = wtPath(obra, id, front.repos[0]);
   // Sin comillas dobles en el prompt: es un solo argumento, pero si alguien lo copia a mano no debe romperse.
-  const prompt = `Sos el nodo ${id} de la obra ${obra.cfg.obra}. Leé ${partPath(obra, id)} y seguí el procedimiento de arranque de un nodo del skill symphony.`.replace(/"/g, "'");
-  const vars = { model: tier.model, prompt, cwd, id, obra: obra.cfg.obra, obra_dir: obra.dir, repo_dir: obra.cfg.repos[front.repos[0]] };
+  const prompt = `Sos el nodo ${id} de la obra ${obra.cfg.obra}. Corré sym node show ${id} y seguí el skill symphony.`.replace(/"/g, "'");
+  const le = obra.cfg.launch_extra || {};
+  const extra = le[front.tipo] ?? le[front.kind] ?? '';
+  const vars = { model: tier.model, reasoning: tier.reasoning || 'medium', extra, prompt, cwd, id, obra: obra.cfg.obra, obra_dir: obra.dir, repo_dir: obra.cfg.repos[front.repos[0]] };
   // Compatibilidad con templates viejos que traían "{prompt}" entre comillas.
   const tpl = String(runnerTpl).replace(/["']\{(\w+)\}["']/g, '{$1}');
-  const argv = tokenize(tpl).map(tok => tok.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`)));
+  const argv = tokenize(tpl).flatMap(tok => tok === '{extra}' ? tokenize(extra) : [tok.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`))]);
   if (!argv.length) fail(`el template del runner "${tier.runner}" está vacío`);
   return { argv, display: argv.map(quoteArg).join(' '), cwd, tier };
 }
@@ -298,7 +310,7 @@ function buildLaunch(obra, id, opt) {
 function cmdLaunch({ pos, opt }) {
   const obra = loadObra(opt);
   const id = pos[0] || fail('uso: sym launch <ID> [--exec | --wave [--magnified]] [--tier N] [--force]');
-  const problems = partReady(obra, id);
+  const problems = obra.registry.nodes[id].status === 'planned' ? partReady(obra, id) : [];
   if (problems.length && !opt.force) fail(`${id} no está listo para lanzar: ${problems.join('; ')}. (--force para ignorar)`);
   const { argv, display, cwd, tier } = buildLaunch(obra, id, opt);
   console.log(`# ${id} · tier ${tier.id} (${tier.label || tier.runner}/${tier.model}) · cwd: ${cwd}`);
@@ -333,6 +345,10 @@ function cmdEvent({ pos, opt }) {
   const part = readPart(obra, id);
   const limits = obra.cfg.limits || {};
   let extra = {};
+  if (type === 'sleep') {
+    const pend = pending(obra, id);
+    if (pend.length) { console.log(`${id}: no te duermas, tenés pendientes:\n  ` + pend.join('\n  ')); process.exit(1); }
+  }
   if (type === 'rejected') {
     const it = (part.front.iteration || 1) + 1;
     setFront(obra, id, 'iteration', it);
@@ -685,6 +701,249 @@ function cmdBoard({ opt }) {
   child.on('exit', code => process.exit(code ?? 0));
 }
 
+
+// ---------- presupuestos por tipo de tarea ----------
+
+// El tier dice qué modelo; el tipo dice qué loop puede ejecutar el nodo.
+const TIPOS = {
+  mecanica:      { archivos: 2, rango: true,  explorar: false, tests: 'sym check', reasoning: 'low',    desc: 'cambio literal o conocido: leé solo los rangos de Ubicaciones, editá, sym diff, sym check' },
+  local:         { archivos: 4, rango: true,  explorar: false, tests: 'sym check', reasoning: 'medium', desc: 'un componente o servicio: leé los rangos de Ubicaciones y como mucho 4 archivos, editá, sym check' },
+  transversal:   { archivos: 8, rango: false, explorar: true,  tests: 'sym check', reasoning: 'medium', desc: 'varios archivos con contrato entre ellos: explorá dentro del territorio, hasta 8 archivos' },
+  investigativa: { archivos: 15, rango: false, explorar: true, tests: 'sym check', reasoning: 'high',   desc: 'causa desconocida: hipótesis → evidencia; hasta 15 archivos; registrá cada hipótesis en la bitácora' },
+};
+function budgetLine(tipo) {
+  const b = TIPOS[tipo]; if (!b) return '';
+  return `presupuesto (${tipo}): ${b.desc}. Archivos máx ${b.archivos}${b.rango ? ', por rango' : ''}; explorar fuera de Ubicaciones: ${b.explorar ? 'sí, dentro del territorio' : 'NO (si hace falta → spec)'}; tests: solo ${b.tests}.`;
+}
+
+// ---------- pendientes y paquete de arranque ----------
+
+function unreadInbox(obra, id) {
+  const lines = inboxLines(obra, id);
+  const read = obra.registry.nodes[id]?.inbox_read || 0;
+  return lines.slice(read);
+}
+function pending(obra, id) {
+  const out = [];
+  for (const c of obra.registry.nodes[id].children) {
+    const st = readPart(obra, c).front.status;
+    if (NEEDS_PARENT.has(st)) { const ev = lastEventOf(obra, c); out.push(`${c} está ${st}${ev?.msg ? ' — ' + ev.msg : ''}`); }
+  }
+  for (const l of unreadInbox(obra, id)) out.push(`mensaje ${l.slice(2)}`);
+  return out;
+}
+function compactBody(text) {
+  // Cuerpo de la partichela sin comentarios ni secciones vacías; títulos como "-- Sección".
+  const body = text.replace(/^---\n[\s\S]*?\n---\n/, '').replace(/<!--[\s\S]*?-->/g, '');
+  const out = [];
+  for (const chunk of body.split(/\n(?=## )/)) {
+    const m = chunk.match(/^## ([^\n]+)\n?([\s\S]*)$/);
+    if (!m) { const h = chunk.trim(); if (h && !h.startsWith('# ')) out.push(h); continue; }
+    const content = m[2].trim();
+    if (!content || content === 'Sin empezar.') continue;
+    out.push(`-- ${m[1].trim()}\n${content}`);
+  }
+  return out.join('\n');
+}
+function cmdShow({ pos, opt }) {
+  const obra = loadObra(opt);
+  const id = pos[0] || fail('uso: sym node show <ID> [--raw]');
+  const part = readPart(obra, id);
+  if (opt.raw) { console.log(part.text); return; }
+  const f = part.front; const n = obra.registry.nodes[id];
+  const lim = obra.cfg.limits || {};
+  const L = [];
+  L.push(`== ${id}${n.title && n.title !== id ? ' · ' + n.title : ''} · ${f.kind} · modo ${f.mode} · status ${f.status} · iter ${f.iteration}/${lim.max_iterations_per_node ?? '∞'} · tier ${f.tier}${f.tipo ? ' · tipo ' + f.tipo : ''}`);
+  L.push(`padre: ${f.parent ?? 'humano'} · repos: ${(f.repos || []).join(', ')} · rama: ${f.branch} · worktree: ${wtPath(obra, id, (f.repos || [])[0])}${f.origin && f.origin !== 'null' ? ' · origen: ' + f.origin : ''}`);
+  if (f.tipo) L.push(budgetLine(f.tipo));
+  if (f.kind !== 'tutti') L.push(`límites: hijos ≤ ${lim.max_children ?? '∞'} · profundidad ≤ ${lim.circuit_breaker_depth ?? '∞'} · suite completa ≤ ${lim.max_global_suite_runs ?? '∞'} (solo D) · afinación: mismo criterio ${obra.cfg.afinacion?.same_criterion_iterations ?? 2} veces → sube, auto hasta tier ${obra.cfg.afinacion?.auto_upgrade_up_to_tier ?? '∞'}`);
+  if (f.territorio?.length) L.push('-- Territorio\n' + f.territorio.map(x => Object.entries(x).map(([r, g]) => `${r}: ${g}`).join(', ')).join('\n'));
+  if (f.criterios?.length) L.push('-- Criterios\n' + f.criterios.map(c => `${c.id} [${c.repo}] ${c.cmd}`).join('\n'));
+  if (f.depends_on?.length) L.push('-- Dependencias\n' + f.depends_on.map(d => `${d} (${obra.registry.nodes[d]?.status ?? '?'})`).join(', '));
+  if (f.evaluaciones?.length) L.push('-- Evaluaciones\n' + f.evaluaciones.map(e => `iter ${e.iteration}: ${e.met}/${e.total} · fallas: ${(e.fallas || []).join(', ') || 'ninguna'}`).join('\n'));
+  L.push(compactBody(part.text));
+  const fb = path.join(nodeDir(obra, id), `feedback-${(f.iteration || 1) - 1}.md`);
+  if (f.status === 'rejected' && fs.existsSync(fb)) L.push(`-- Feedback vigente (${path.basename(fb)})\n` + fs.readFileSync(fb, 'utf8').trim());
+  const unread = unreadInbox(obra, id);
+  if (unread.length) L.push('-- Inbox nuevo\n' + unread.map(l => l.slice(2)).join('\n'));
+  if (n.children.length) {
+    L.push('-- Hijos\n' + n.children.map(c => { const cf = readPart(obra, c).front; const ev = lastEventOf(obra, c); return `${c} · ${cf.status}${NEEDS_PARENT.has(cf.status) ? ' ← TE ESPERA' : ''} · iter ${cf.iteration} · tier ${cf.tier}${ev?.msg ? ' — ' + ev.msg : ''}`; }).join('\n'));
+    for (const c of n.children) if (NEEDS_PARENT.has(readPart(obra, c).front.status)) { const est = sectionOf(readPart(obra, c).text, 'Estado actual'); if (est) L.push(`-- Estado actual de ${c}\n${est}`); }
+  }
+  console.log(L.join('\n'));
+  // Lo mostrado cuenta como leído.
+  obra.registry.nodes[id].inbox_read = inboxLines(obra, id).length;
+  saveRegistry(obra);
+}
+
+// ---------- diff acotado ----------
+
+function cmdDiff({ pos, opt }) {
+  const obra = loadObra(opt);
+  const id = pos[0] || fail('uso: sym diff <ID> [--max 200] [--stat]');
+  const { front } = readPart(obra, id);
+  const max = Number(opt.max ?? 200);
+  const base = front.parent ? branchOf(obra, front.parent) : obra.cfg.base_branch;
+  for (const repo of front.repos) {
+    const cwd = wtPath(obra, id, repo);
+    if (!fs.existsSync(cwd)) continue;
+    const ex = ['--', '.', ':(exclude)CLAUDE.md', ':(exclude)AGENTS.md'];
+    console.log(`== ${id} · ${repo} · contra ${base}`);
+    console.log(git(cwd, ['diff', '--stat', base, ...ex]).stdout.trim() || '(sin cambios)');
+    if (opt.stat) continue;
+    const lines = git(cwd, ['diff', base, ...ex]).stdout.split('\n');
+    console.log(lines.slice(0, max).join('\n'));
+    if (lines.length > max) console.log(`… ${lines.length - max} líneas más (usá --max N o pedí un archivo: git -C ${cwd} diff ${base} -- <ruta>)`);
+  }
+}
+
+// ---------- conduct: el que despierta a los nodos (sin modelo) ----------
+
+function cmdConduct({ opt }) {
+  const obra = loadObra(opt);
+  const focus = opt.focus || null;
+  if (focus && !obra.registry.nodes[focus]) fail(`${focus} no existe`);
+  const inScope = (id) => { if (!focus) return true; for (let x = id; x; x = obra.registry.nodes[x]?.parent) if (x === focus) return true; return false; };
+  const launching = {}; // id → ts del relanzamiento, hasta que emita `started`
+  const evPath = path.join(obra.dir, 'events.jsonl');
+  let offset = fs.existsSync(evPath) ? fs.statSync(evPath).size : 0;
+  const log = (s) => console.log(`${new Date().toISOString().slice(11, 19)} ${s}`);
+  const reload = () => { obra.registry = JSON.parse(fs.readFileSync(path.join(obra.dir, 'registry.json'), 'utf8')); };
+  const wake = (id, why) => {
+    reload();
+    const n = obra.registry.nodes[id];
+    if (!n || n.status === 'cleaned') return;
+    if (n.awake) { log(`${id} está despierto; verá "${why}" en su próximo sym wait o sym node show`); return; }
+    if (launching[id] && Date.now() - launching[id] < 10 * 60 * 1000) { log(`${id} ya fue relanzado hace ${Math.round((Date.now() - launching[id]) / 1000)}s; espero su started`); return; }
+    const problems = n.status === 'planned' ? partReady(obra, id) : []; // relanzar un nodo en curso no pasa por la puerta de entrada
+    if (problems.length) { log(`${id} necesita atención (${why}) pero no está listo para lanzar: ${problems.join('; ')}`); return; }
+    const { argv, display, cwd } = buildLaunch(obra, id, {});
+    launching[id] = Date.now();
+    if (hasWsh()) {
+      const win = process.platform === 'win32';
+      const wargs = ['run', '--cwd', cwd, '--', ...argv];
+      const r = win ? spawnSync([wshBin(), ...wargs].map(quoteArg).join(' '), { stdio: 'ignore', shell: true }) : spawnSync(wshBin(), wargs, { stdio: 'ignore' });
+      log(`relancé ${id} en un bloque de Wave (${why})${r.status ? ' — wsh devolvió ' + r.status : ''}`);
+    } else {
+      log(`${id} necesita relanzarse (${why}). Sin wsh no puedo abrirlo; pegá esto en una pestaña:\n    cd ${quoteArg(cwd)} && ${display}`);
+      if (hasWsh()) wsh(['notify', `${id} necesita relanzarse`, '-t', 'Symphony'], { stdio: 'ignore' });
+    }
+  };
+  const handle = (e) => {
+    if (e.type === 'started') { delete launching[e.id]; return; }
+    const parent = obra.registry.nodes[e.id]?.parent;
+    if (['done', 'blocked'].includes(e.type) && parent && inScope(parent)) return wake(parent, `${e.id} ${e.type}${e.msg ? ': ' + e.msg : ''}`);
+    if (['rejected', 'upgraded'].includes(e.type) && inScope(e.id)) return wake(e.id, `${e.type}${e.msg ? ': ' + e.msg : ''}`);
+    if (e.type === 'message' && e.to && e.to !== 'humano' && inScope(e.to)) return wake(e.to, `mensaje de ${e.id}`);
+    if (e.type === 'waiting_human' && inScope(e.id)) { log(`${e.id} espera al humano${e.msg ? ': ' + e.msg : ''}`); if (hasWsh()) wsh(['notify', `${e.id} espera una decisión tuya`, '-t', 'Symphony'], { stdio: 'ignore' }); }
+  };
+  log(`conduct${focus ? ' · foco ' + focus : ''} · obra ${obra.cfg.obra} · ${hasWsh() ? 'relanzo en bloques de Wave' : 'sin wsh: solo aviso'}`);
+  // Arranque: lo que ya está pendiente de un padre dormido.
+  for (const id of Object.keys(obra.registry.nodes)) {
+    if (!inScope(id)) continue;
+    const pend = pending(obra, id);
+    if (pend.length && !obra.registry.nodes[id].awake) wake(id, pend[0]);
+  }
+  const tick = () => {
+    try {
+      if (!fs.existsSync(evPath)) return;
+      const size = fs.statSync(evPath).size;
+      if (size < offset) offset = 0;
+      if (size === offset) return;
+      const fd = fs.openSync(evPath, 'r'); const buf = Buffer.alloc(size - offset);
+      fs.readSync(fd, buf, 0, size - offset, offset); fs.closeSync(fd); offset = size;
+      reload();
+      for (const line of buf.toString('utf8').split('\n').filter(Boolean)) { try { handle(JSON.parse(line)); } catch { /* línea parcial */ } }
+    } catch (e) { log(`error: ${e.message}`); }
+  };
+  if (opt.once) { tick(); return; }
+  setInterval(tick, Number(opt.interval ?? 2) * 1000);
+}
+
+
+// ---------- cost: tokens por nodo, leyendo los logs de sesión de los runners ----------
+
+function* walkObj(o, depth = 0) {
+  if (!o || typeof o !== 'object' || depth > 12) return;
+  yield o;
+  for (const v of Object.values(o)) if (v && typeof v === 'object') yield* walkObj(v, depth + 1);
+}
+function* jsonlFiles(dir) {
+  if (!fs.existsSync(dir)) return;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) yield* jsonlFiles(p); else if (e.name.endsWith('.jsonl')) yield p;
+  }
+}
+function readSession(file, runner) {
+  let cwd = null; let codexTotal = null; const claudeSeen = new Set();
+  const u = { input: 0, cached: 0, reasoning: 0, output: 0 };
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  for (const line of lines) {
+    if (!line.startsWith('{')) continue;
+    let o; try { o = JSON.parse(line); } catch { continue; }
+    for (const x of walkObj(o)) {
+      if (!cwd && typeof x.cwd === 'string') cwd = x.cwd;
+      if (runner === 'codex' && x.total_token_usage && typeof x.total_token_usage === 'object') codexTotal = x.total_token_usage;
+      if (runner === 'claude' && x.usage && typeof x.usage.input_tokens === 'number') {
+        const key = x.id || x.message?.id || line.slice(0, 80);
+        if (claudeSeen.has(key)) continue; claudeSeen.add(key);
+        u.input += x.usage.input_tokens || 0;
+        u.cached += (x.usage.cache_read_input_tokens || 0) + (x.usage.cache_creation_input_tokens || 0);
+        u.output += x.usage.output_tokens || 0;
+      }
+    }
+  }
+  if (runner === 'codex' && codexTotal) {
+    const c = codexTotal.cached_input_tokens || 0;
+    u.input = Math.max(0, (codexTotal.input_tokens || 0) - c); u.cached = c;
+    u.reasoning = codexTotal.reasoning_output_tokens || 0; u.output = codexTotal.output_tokens || 0;
+  }
+  return { file, runner, cwd, usage: u, turns: lines.length };
+}
+function cmdCost({ opt }) {
+  const obra = loadObra(opt);
+  const wtRoot = path.resolve(obra.dir, 'wt');
+  const nodeOfCwd = (cwd) => {
+    if (!cwd) return null;
+    const rel = path.relative(wtRoot, path.resolve(cwd));
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    return rel.split(/[\\/]/)[0];
+  };
+  const home = os.homedir();
+  const sources = [
+    { runner: 'codex', dir: path.join(process.env.CODEX_HOME || path.join(home, '.codex'), 'sessions') },
+    { runner: 'claude', dir: path.join(home, '.claude', 'projects') },
+  ];
+  const sessions = [];
+  for (const s of sources) for (const f of jsonlFiles(s.dir)) { try { sessions.push(readSession(f, s.runner)); } catch { /* archivo raro */ } }
+  const byNode = {}; let matched = 0;
+  for (const s of sessions) {
+    const id = nodeOfCwd(s.cwd); if (!id || !obra.registry.nodes[id]) continue;
+    matched++;
+    const b = (byNode[id] ||= { sessions: 0, input: 0, cached: 0, reasoning: 0, output: 0 });
+    b.sessions++; for (const k of ['input', 'cached', 'reasoning', 'output']) b[k] += s.usage[k];
+  }
+  if (!matched) { console.log(`no encontré sesiones cuyo cwd sea un worktree de esta obra (revisé ${sessions.length} archivos en ${sources.map(s => s.dir).join(' y ')}). Si tu runner guarda los logs en otro lado, decímelo.`); return; }
+  const eff = (b) => Math.round(b.input + b.cached * 0.1 + (b.reasoning + b.output) * 8); // misma escala que la estimación: input-equivalentes
+  const fmt = (n) => n.toLocaleString('es-AR');
+  console.log(`obra ${obra.cfg.obra} · ${matched} sesiones de ${sessions.length} encontradas\n`);
+  console.log('nodo        kind       tier status      ses   input      cached     reasoning  output     equiv*');
+  const ids = Object.keys(byNode).sort();
+  const byTier = {};
+  for (const id of ids) {
+    const b = byNode[id]; const n = obra.registry.nodes[id]; const f = readPart(obra, id).front;
+    console.log(`${id.padEnd(11)} ${n.kind.padEnd(10)} ${String(f.tier).padEnd(4)} ${String(f.status).padEnd(11)} ${String(b.sessions).padStart(3)}   ${fmt(b.input).padEnd(10)} ${fmt(b.cached).padEnd(10)} ${fmt(b.reasoning).padEnd(10)} ${fmt(b.output).padEnd(10)} ${fmt(eff(b))}`);
+    const tb = (byTier[f.tier] ||= { nodes: 0, ok: 0, equiv: 0, sessions: 0 });
+    tb.nodes++; tb.sessions += b.sessions; tb.equiv += eff(b); if (['accepted', 'merged'].includes(f.status)) tb.ok++;
+  }
+  console.log('\ntier  nodos  aceptados  sesiones  equiv total   equiv por nodo aceptado');
+  for (const [tier, tb] of Object.entries(byTier)) console.log(`${String(tier).padEnd(5)} ${String(tb.nodes).padEnd(6)} ${String(tb.ok).padEnd(10)} ${String(tb.sessions).padEnd(9)} ${fmt(tb.equiv).padEnd(13)} ${tb.ok ? fmt(Math.round(tb.equiv / tb.ok)) : '—'}`);
+  console.log('\n* equiv = input + 0,1·cached + 8·(reasoning+output): tokens de input equivalentes, la misma escala de la estimación. Ajustá los factores a tu tarifa.');
+  const total = ids.reduce((a, id) => a + eff(byNode[id]), 0);
+  console.log(`total obra: ${fmt(total)} equiv`);
+}
+
 // ---------- comunicación: wait / tell ----------
 
 function sectionOf(text, title) {
@@ -731,6 +990,7 @@ function cmdWait({ pos, opt }) {
       if (snap.status === 'rejected' && fs.existsSync(fb)) out.push(`  leé ${fb}`);
     }
     for (const l of inboxLines(obra, id).slice(prevInbox)) out.push(`mensaje ${l.slice(2)}`);
+    obra.registry.nodes[id].inbox_read = inboxLines(obra, id).length; saveRegistry(obra);
     return out;
   };
   const attention = (snap) => Object.values(snap.children).some(st => NEEDS_PARENT.has(st));
@@ -786,6 +1046,7 @@ function cmdTab({ pos, opt }) {
   };
   lines.push(launchLine(id));
   for (const c of node.children) lines.push(launchLine(c));
+  lines.push(`sym conduct --focus ${id} --wave   # queda corriendo: relanza nodos de este linaje cuando hace falta`);
   console.log(lines.join('\n'));
 }
 
@@ -813,9 +1074,9 @@ function waveBadge(type, id) {
 
 const { pos, opt } = parseArgs(process.argv.slice(2));
 const cmd = pos.shift();
-const commands = { init: cmdInit, node: cmdNode, launch: cmdLaunch, event: cmdEvent, check: cmdCheck, merge: cmdMerge, blame: cmdBlame, status: cmdStatus, clean: cmdClean, doctor: cmdDoctor, score: cmdScore, board: cmdBoard, wait: cmdWait, tell: cmdTell, tab: cmdTab };
+const commands = { init: cmdInit, node: cmdNode, launch: cmdLaunch, event: cmdEvent, check: cmdCheck, merge: cmdMerge, blame: cmdBlame, status: cmdStatus, clean: cmdClean, doctor: cmdDoctor, score: cmdScore, board: cmdBoard, wait: cmdWait, tell: cmdTell, tab: cmdTab, diff: cmdDiff, conduct: cmdConduct, cost: cmdCost };
 if (!cmd || !commands[cmd]) {
-  console.log(`sym — Symphony\n\n  init <obra> --repos a=/ruta,b=/ruta [--base main] [--root ./repertorio]\n  node create <padre> --kind atril|tutti|reparacion [--repos a,b] [--tier N] [--title ..] [--origin ID] [--depends A1.T1]\n  node show <ID>\n  launch <ID> [--exec | --wave [--magnified]] [--tier N] [--force]\n  event <ID> <tipo> [-m msg] [--approved]\n  check <ID>\n  merge <ID> [--force]\n  blame <repo>/<ruta>\n  status\n  clean <ID> | --all [--include-director]\n  score [--render | --open]      regenera score.archify.json (y score.html)\n  board [--wave] [--focus ID] [--detach | --stop]   preview en vivo; --focus muestra solo el linaje de ID\n  wait <ID> [--timeout 100] [--once]   espera novedades de tus hijos, de tu estado o de tu inbox\n  tell <ID|humano> -m msg --from <tuID>   deja un mensaje en el inbox de otro nodo\n  tab <ID>                        bloque de comandos para abrir ese nodo y sus hijos en una pestaña de Wave\n  doctor\n\nTodos aceptan --obra <ruta> (o SYMPHONY_OBRA); si no, se busca symphony.yaml hacia arriba desde el cwd.`);
+  console.log(`sym — Symphony\n\n  init <obra> --repos a=/ruta,b=/ruta [--base main] [--root ./repertorio]\n  node create <padre> --kind atril|tutti|reparacion [--repos a,b] [--tier N] [--tipo mecanica|local|transversal|investigativa] [--title ..] [--origin ID] [--depends A1.T1]\n  node show <ID> [--raw]          paquete de arranque compacto (--raw: el archivo entero)\n  launch <ID> [--exec | --wave [--magnified]] [--tier N] [--force]\n  event <ID> <tipo> [-m msg] [--approved]   tipos: started checkpoint done blocked waiting_human accepted rejected upgraded merged cleaned sleep\n  check <ID>\n  merge <ID> [--force]\n  blame <repo>/<ruta>\n  status\n  clean <ID> | --all [--include-director]\n  score [--render | --open]      regenera score.archify.json (y score.html)\n  board [--wave] [--focus ID] [--detach | --stop]   preview en vivo; --focus muestra solo el linaje de ID\n  wait <ID> [--timeout 100] [--once]   espera novedades de tus hijos, de tu estado o de tu inbox\n  tell <ID|humano> -m msg --from <tuID>   deja un mensaje en el inbox de otro nodo\n  tab <ID>                        bloque de comandos para abrir ese nodo y sus hijos en una pestaña de Wave\n  diff <ID> [--max 200] [--stat]  diff del nodo contra su padre, acotado\n  conduct [--focus ID] [--wave]   proceso sin modelo: relanza nodos dormidos cuando un hijo termina/bloquea, los rechazan o les escriben\n  cost [--by node|tier]           tokens por nodo leyendo los logs de sesión de Codex y Claude Code\n  doctor\n\nTodos aceptan --obra <ruta> (o SYMPHONY_OBRA); si no, se busca symphony.yaml hacia arriba desde el cwd.`);
   process.exit(cmd ? 1 : 0);
 }
 commands[cmd]({ pos, opt });

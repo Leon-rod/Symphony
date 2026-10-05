@@ -14,10 +14,10 @@ Del brief al primer nivel del árbol. Solo el primer nivel: los atriles dividen 
    - Un área por frontera natural del sistema (un repo, un módulo, una capa) antes que por tipo de tarea.
    - Si dos áreas tienen que compartir una interfaz, escribí esa interfaz en los **Contratos** de ambas antes de crearlas.
    - Si solo hay un área, hay un solo atril. No inventes paralelismo.
-3. Creá cada atril con `sym node create D --kind atril --repos <repos> --title "<área>"` y completá su partichela: Objetivo, Alcance, Contratos, Territorio, Criterios, Contexto (señalá dónde mirar en el repo, no pegues código). Tier: el que indique `default_tier.atril` salvo que el área sea claramente trivial o claramente difícil.
+3. Creá cada atril con `sym node create D --kind atril --repos <repos> --title "<área>"` y completá su partichela: Objetivo, Alcance, Contratos, Territorio, Criterios, Ubicaciones (los archivos y rangos del área que ya leíste durante el relevamiento: cada línea le ahorra exploración al atril) y Contexto. Tier: el que indique `default_tier.atril` salvo que el área sea claramente trivial o claramente difícil.
 4. Si el área pide tests, no los asignes al atril: anotá en su Contexto que debe crear un nodo de tests aparte.
 5. Generá el diagrama con `sym score --render`. Produce `score.archify.json` (desde el registro: cada nodo es un componente, cada atril de primer nivel una región, cada relación padre-hijo una conexión) y `score.html` con Archify. No lo armes a mano: el archivo se regenera con cada evento, y cualquier edición manual se pierde. Si Archify no está instalado, `sym score` lo dice y la obra sigue igual; el diagrama es una vista, no un requisito.
-6. Mostrá el árbol al desarrollador (`sym status`) y pedí confirmación. Este es un checkpoint humano: no lances atriles hasta tenerla.
+6. Mostrá el árbol al desarrollador (`sym status`) y pedí confirmación. Este es un checkpoint humano: no lances atriles hasta tenerla. Confirmado: `sym tab D` para el humano (o `sym launch <atril> --wave` por cada uno si estás en Wave), Estado actual, `sym event D sleep` y terminá la sesión. `sym conduct` te relanza cuando un atril marque `done` o `blocked`.
 
 ## Qué NO hacer
 
