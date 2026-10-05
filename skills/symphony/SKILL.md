@@ -130,7 +130,6 @@ Cuando un nodo sí escribe tests:
 
 - Sigue el `TESTING.md` del repo. Copiá el ejemplo canónico que hay ahí; no inventes un estilo.
 - Cada test referencia el ID del criterio que cubre (`// AC-3`). `critica` verifica que cada criterio tenga al menos un test y cada test tenga un criterio. Un test huérfano se borra.
-- **Red check**: el evaluador hace checkout de la rama del padre, corre los tests nuevos y tienen que fallar; vuelve a la rama del hijo y tienen que pasar. Un test que pasa sin el cambio no prueba nada.
 - `sym check` rechaza el diff si aparece cualquiera de los patrones prohibidos de `tests.forbidden_patterns` en `symphony.yaml`. Esa lista es mecánica: no se discute en una review, se corrige.
 
 Quién corre qué: cada nodo, sus criterios (`sym check`), antes de marcar `done`. Cada padre, sus propios criterios al integrar. El director, la suite completa, al final, dentro del límite de la regla 7.
@@ -149,7 +148,7 @@ Cuando un nodo en modo `plan` crea hijos, cada hijo nace con su partichela compl
 
 ## Evaluar e iterar (resumen de `critica` y `afinacion`)
 
-Cuando un hijo marca `done`, el padre entra en modo `review`, corre `sym check <hijo>`, hace el red check si hay tests, y decide `accepted` o `rejected`. Si rechaza, escribe `feedback-n.md` con las fallas clasificadas en una de estas categorías, siempre:
+Cuando un hijo marca `done`, el padre entra en modo `review`, corre `sym check <hijo>`, lee el diff, y decide `accepted` o `rejected`. Si rechaza, escribe `feedback-n.md` con las fallas clasificadas en una de estas categorías, siempre:
 
 | Categoría | Significa | Qué pasa |
 |---|---|---|

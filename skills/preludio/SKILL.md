@@ -36,7 +36,7 @@ npm install -g github:Leon-rod/Symphony       # el comando sym
 | `arreglo` | atriles | Dividir en tareas con territorio, contratos, criterios y nivel de modelo. |
 | `lirico` | todos | Cambiar de modo (plan, execute, review, integrate). |
 | `ensayo` | nodos en execute | Ejecutar la tarea, autoverificar, reportar. |
-| `critica` | padres | Evaluar a un hijo contra sus criterios. Red check. Clasificar fallas. |
+| `critica` | padres | Evaluar a un hijo contra sus criterios y clasificar las fallas. |
 | `afinacion` | padres | Decidir, con datos, si un hijo necesita un modelo más capaz. |
 | `ensamble` | padres | Integrar hijos aceptados y correr los criterios propios. |
 | `curtain-call` | director | Cerrar la obra: limpiar worktrees y ramas, archivar. |

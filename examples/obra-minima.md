@@ -28,7 +28,7 @@ sym launch A1.T1 --exec
 #   → `ensamble`: sym merge A1.T1
 sym launch A1.T2 --exec          # antes de esto, sym se niega: A1.T1 no estaba merged
 #   → el tester lee TESTING.md, escribe tests con // AC-n, done.
-#   → `critica` hace el red check; si rechaza dos veces por el mismo AC,
+#   → `critica` corre sym check y lee el diff; si rechaza dos veces por el mismo AC,
 #     `afinacion` lo sube: sym event A1.T2 upgraded → sym launch A1.T2
 
 # Tablero (en cualquier momento, en otro bloque)

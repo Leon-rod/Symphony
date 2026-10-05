@@ -4,7 +4,7 @@ Convenciones de tests de este repo. Este archivo lo mantiene el desarrollador, n
 
 ## Qué es un test que vale
 
-Un test vale si responde a un criterio de aceptación concreto (`AC-n`) y **falla cuando el comportamiento que cubre se rompe**. Si al revertir el cambio el test sigue pasando, no está probando nada y se borra.
+Un test vale si responde a un criterio de aceptación concreto (`AC-n`) y **falla cuando el comportamiento que cubre se rompe**. Un test que pasaría igual sin el cambio no está probando nada y se borra.
 
 Un test no vale si:
 
