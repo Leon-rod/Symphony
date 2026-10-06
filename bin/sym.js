@@ -159,7 +159,7 @@ function logEvent(obra, id, type, msg, extra = {}) {
   else if (SLEEP_EVENTS.has(type)) obra.registry.nodes[id].awake = false;
   saveRegistry(obra);
   writeScore(obra);
-  waveBadge(type, id);
+  waveBadge(type, id, obra);
   return ev;
 }
 
@@ -318,15 +318,15 @@ function cmdLaunch({ pos, opt }) {
   const win = process.platform === 'win32';
   if (opt.exec && !process.stdin.isTTY) {
     // Un agente (sin terminal interactiva) no puede ejecutar un runner interactivo adentro suyo.
-    if (hasWsh()) { console.error(`sym: sin terminal interactiva; lo abro en un bloque de Wave (--wave)`); opt.wave = true; }
+    if (waveReady(obra)) { console.error(`sym: sin terminal interactiva; lo abro en un bloque de Wave (--wave)`); opt.wave = true; }
     else { console.log(`\nsym: --exec necesita una terminal interactiva y acá no hay (ni wsh). Pedile al humano que abra el comando de arriba en una pestaña de Wave: \`sym tab ${parentOf(id) || id}\` le da el bloque completo para pegar.`); return; }
   }
   if (opt.wave) {
     if (!hasWsh()) fail('wsh no está disponible: corré esto desde un bloque de Wave (o instalá wsh en la conexión WSL/SSH)');
-    const wargs = ['run', '--cwd', cwd, ...(opt.magnified ? ['-m'] : []), '--', ...argv];
-    // En Windows los runners suelen ser shims .cmd que solo cmd.exe sabe resolver; ahí sí va por shell, citado a mano.
-    const r = win ? spawnSync([wshBin(), ...wargs].map(quoteArg).join(' '), { stdio: 'inherit', shell: true })
-                  : spawnSync(wshBin(), wargs, { stdio: 'inherit' });
+    if (!waveReady(obra)) fail('estoy en Wave pero sin credencial (WAVETERM_JWT) y sin swap token para canjear. Pasa en bloques abiertos con `wsh run` por una versión vieja de sym. Cerrá este bloque y relanzá el nodo desde una pestaña (sym tab), o pegá el comando de arriba vos.');
+    const wargs = ['run', '--cwd', cwd, ...(opt.magnified ? ['-m'] : []), '--', ...wrapForWave(argv)];
+    const r = win ? spawnSync([wshBin(), ...wargs].map(quoteArg).join(' '), { stdio: 'inherit', shell: true, env: waveEnv(obra) })
+                  : spawnSync(wshBin(), wargs, { stdio: 'inherit', env: waveEnv(obra) });
     process.exit(r.status ?? 0);
   }
   if (opt.exec) {
@@ -513,6 +513,7 @@ function cmdDoctor() {
   check('codex', 'codex --version');
   check('opencode', 'opencode --version');
   check('wsh (Wave)', 'wsh version');
+  console.log(`${process.env.WAVETERM_JWT ? '✓' : process.env.WAVETERM_SWAPTOKEN ? '~' : '✗'} credencial de Wave: ${process.env.WAVETERM_JWT ? 'WAVETERM_JWT presente' : process.env.WAVETERM_SWAPTOKEN ? 'solo WAVETERM_SWAPTOKEN (sym lo canjea solo)' : 'ninguna (fuera de Wave, o bloque abierto por un sym viejo)'}`);
   const skillDirs = ['.claude/skills', '.agents/skills', '.config/opencode/skills'].map(d => path.join(os.homedir(), d));
   const archify = findArchify(null);
   console.log(`${archify ? '✓' : '✗'} archify${archify ? ': ' + archify + ' (sym board disponible)' : ' (npx skills add tt-a1i/archify -g; sin esto no hay sym board)'}`);
@@ -679,7 +680,7 @@ function cmdBoard({ opt }) {
   const args = [archify, 'preview', 'architecture', f.json, f.html, '--no-open'];
   const urlRe = /https?:\/\/127\.0\.0\.1:\d+[^\s"']*/;
   const announce = (url) => {
-    if (opt.wave && hasWsh()) wsh(['web', 'open', url], { stdio: 'inherit' });
+    if (opt.wave && hasWsh()) wsh(['web', 'open', url], { stdio: 'inherit' }, obra);
     console.log(`tablero${focus ? ' (foco ' + focus + ')' : ''}: ${url}  — se actualiza con cada sym event`);
   };
   if (opt.detach) {
@@ -819,10 +820,10 @@ function cmdConduct({ opt }) {
     if (problems.length) { log(`${id} necesita atención (${why}) pero no está listo para lanzar: ${problems.join('; ')}`); return; }
     const { argv, display, cwd } = buildLaunch(obra, id, {});
     launching[id] = Date.now();
-    if (hasWsh()) {
+    if (waveReady(obra)) {
       const win = process.platform === 'win32';
-      const wargs = ['run', '--cwd', cwd, '--', ...argv];
-      const r = win ? spawnSync([wshBin(), ...wargs].map(quoteArg).join(' '), { stdio: 'ignore', shell: true }) : spawnSync(wshBin(), wargs, { stdio: 'ignore' });
+      const wargs = ['run', '--cwd', cwd, '--', ...wrapForWave(argv)];
+      const r = win ? spawnSync([wshBin(), ...wargs].map(quoteArg).join(' '), { stdio: 'ignore', shell: true, env: waveEnv(obra) }) : spawnSync(wshBin(), wargs, { stdio: 'ignore', env: waveEnv(obra) });
       log(`relancé ${id} en un bloque de Wave (${why})${r.status ? ' — wsh devolvió ' + r.status : ''}`);
     } else {
       log(`${id} necesita relanzarse (${why}). Sin wsh no puedo abrirlo; pegá esto en una pestaña:\n    cd ${quoteArg(cwd)} && ${display}`);
@@ -837,7 +838,7 @@ function cmdConduct({ opt }) {
     if (e.type === 'message' && e.to && e.to !== 'humano' && inScope(e.to)) return wake(e.to, `mensaje de ${e.id}`);
     if (e.type === 'waiting_human' && inScope(e.id)) { log(`${e.id} espera al humano${e.msg ? ': ' + e.msg : ''}`); if (hasWsh()) wsh(['notify', `${e.id} espera una decisión tuya`, '-t', 'Symphony'], { stdio: 'ignore' }); }
   };
-  log(`conduct${focus ? ' · foco ' + focus : ''} · obra ${obra.cfg.obra} · ${hasWsh() ? 'relanzo en bloques de Wave' : 'sin wsh: solo aviso'}`);
+  log(`conduct${focus ? ' · foco ' + focus : ''} · obra ${obra.cfg.obra} · ${waveReady(obra) ? 'relanzo en bloques de Wave' : hasWsh() ? 'wsh sin credencial de Wave: solo aviso' : 'sin wsh: solo aviso'}`);
   // Arranque: lo que ya está pendiente de un padre dormido.
   for (const id of Object.keys(obra.registry.nodes)) {
     if (!inScope(id)) continue;
@@ -1022,8 +1023,8 @@ function cmdTell({ pos, opt }) {
   fs.appendFileSync(inboxPath(obra, to), line);
   fs.appendFileSync(path.join(obra.dir, 'events.jsonl'), JSON.stringify({ ts: now(), id: from, type: 'message', to, msg: opt.m }) + '\n');
   if (to === 'humano' && hasWsh()) {
-    wsh(['notify', String(opt.m).slice(0, 120), '-t', `Symphony · ${from}`], { stdio: 'ignore' });
-    if (process.env.WAVETERM_BLOCKID) wsh(['badge', 'envelope', '--color', 'blue', '--priority', '12'], { stdio: 'ignore' });
+    wsh(['notify', String(opt.m).slice(0, 120), '-t', `Symphony · ${from}`], { stdio: 'ignore' }, obra);
+    if (process.env.WAVETERM_BLOCKID) wsh(['badge', 'envelope', '--color', 'blue', '--priority', '12'], { stdio: 'ignore' }, obra);
   }
   console.log(`mensaje de ${from} para ${to} guardado en ${inboxPath(obra, to)}${to === 'humano' ? '' : ` (lo ve con sym wait ${to})`}`);
 }
@@ -1055,19 +1056,51 @@ function cmdTab({ pos, opt }) {
 let _wsh;
 function wshBin() {
   if (_wsh !== undefined) return _wsh;
-  const cands = ['wsh', path.join(os.homedir(), '.waveterm', 'bin', 'wsh')];
+  // Ruta absoluta: el wrapper que canjea el swap token corre en un bloque nuevo cuyo PATH no controlamos.
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd', ''] : [''];
+  const inPath = (process.env.PATH || '').split(path.delimiter).flatMap(d => exts.map(e => path.join(d, 'wsh' + e))).find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } });
+  const cands = [inPath, path.join(os.homedir(), '.waveterm', 'bin', 'wsh'), path.join(os.homedir(), '.waveterm', 'bin', 'wsh.exe')].filter(Boolean);
   _wsh = cands.find(c => spawnSync(c, ['version'], { encoding: 'utf8' }).status === 0) || null;
   return _wsh;
 }
 function hasWsh() { return !!wshBin(); }
-function wsh(args, opts = {}) { return spawnSync(wshBin(), args, { encoding: 'utf8', ...opts }); }
-function waveBadge(type, id) {
-  if (!process.env.WAVETERM_BLOCKID || !hasWsh()) return;
+// Un bloque abierto con `wsh run` recibe WAVETERM_SWAPTOKEN pero nadie lo canjea por el JWT (eso lo hace la
+// integración de shell de Wave, que en un bloque de comando no corre). Sin JWT, wsh no puede hablar con Wave.
+// Acá hacemos el mismo canje que hace el bashrc de Wave, y lo cacheamos por bloque porque el token es de un solo uso.
+let _waveEnv;
+function waveEnv(obra) {
+  if (_waveEnv !== undefined) return _waveEnv;
+  if (process.env.WAVETERM_JWT) return (_waveEnv = process.env);
+  if (!wshBin()) return (_waveEnv = null);
+  const block = process.env.WAVETERM_BLOCKID;
+  const cache = obra && block ? path.join(obra.dir, '.wave', `${block}.jwt`) : null;
+  if (cache && fs.existsSync(cache)) return (_waveEnv = { ...process.env, WAVETERM_JWT: fs.readFileSync(cache, 'utf8').trim() });
+  if (!process.env.WAVETERM_SWAPTOKEN) return (_waveEnv = null);
+  const r = spawnSync(wshBin(), ['token', process.env.WAVETERM_SWAPTOKEN, 'bash'], { encoding: 'utf8' });
+  const m = (r.stdout || '').match(/export WAVETERM_JWT=["']?([^"'\n]+)["']?/);
+  if (!m) return (_waveEnv = null);
+  if (cache) { try { fs.mkdirSync(path.dirname(cache), { recursive: true }); fs.writeFileSync(cache, m[1] + '\n'); } catch { /* sin cache */ } }
+  return (_waveEnv = { ...process.env, WAVETERM_JWT: m[1] });
+}
+function waveReady(obra) { return !!waveEnv(obra); }
+function wsh(args, opts = {}, obra = null) { return spawnSync(wshBin(), args, { encoding: 'utf8', env: waveEnv(obra) || process.env, ...opts }); }
+// Envuelve el comando de un nodo para que su bloque canjee el swap token al arrancar, igual que el bashrc de Wave.
+// Así el runner y todo lo que lance (incluido `sym`) tienen WAVETERM_JWT y pueden abrir bloques, poner badges, etc.
+function wrapForWave(argv) {
+  if (process.platform === 'win32') {
+    const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+    return ['pwsh', '-NoProfile', '-Command', `$o = & ${q(wshBin())} token $env:WAVETERM_SWAPTOKEN pwsh 2>$null | Out-String; if ($o) { Invoke-Expression $o }; Remove-Item Env:WAVETERM_SWAPTOKEN -ErrorAction SilentlyContinue; & ${argv.map(q).join(' ')}`];
+  }
+  const script = `eval "$(${quoteArg(wshBin())} token "$WAVETERM_SWAPTOKEN" bash 2>/dev/null)"; unset WAVETERM_SWAPTOKEN; exec "$@"`;
+  return ['bash', '-c', script, 'symphony-wave', ...argv];
+}
+function waveBadge(type, id, obra) {
+  if (!process.env.WAVETERM_BLOCKID || !waveReady(obra)) return;
   const badge = { waiting_human: ['triangle-exclamation', 'red', 20], blocked: ['flag', 'orange', 15], done: ['circle-check', 'green', 10], accepted: ['circle-check', 'green', 10], rejected: ['rotate', 'orange', 10], started: null, cleaned: null }[type];
   if (badge === undefined) return;
   const args = badge ? ['badge', badge[0], '--color', badge[1], '--priority', String(badge[2])] : ['badge', '--clear'];
-  wsh(args, { stdio: 'ignore' });
-  if (type === 'waiting_human') wsh(['notify', `${id} espera una decisión tuya`, '-t', 'Symphony'], { stdio: 'ignore' });
+  wsh(args, { stdio: 'ignore' }, obra);
+  if (type === 'waiting_human') wsh(['notify', `${id} espera una decisión tuya`, '-t', 'Symphony'], { stdio: 'ignore' }, obra);
 }
 
 // ---------- main ----------

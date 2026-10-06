@@ -1,6 +1,6 @@
 {
   "name": "symphony",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Orquestación jerárquica de agentes de código: director → atriles → tutti, con estado en disco y worktrees de git.",
   "type": "module",
   "bin": {
