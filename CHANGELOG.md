@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.2 — Windows: el wrapper de Wave va en base64
+- Wave vuelve a citar los argumentos de `wsh run --` al estilo POSIX y los ejecuta con `<shell> -c`; en Windows ese shell es pwsh y el script de 0.4.1, con comillas simples adentro, llegaba roto (ningún nodo arrancaba). Ahora en Windows el script viaja con `-EncodedCommand` (base64 UTF-16LE), sin nada que Wave pueda alterar. Linux, Mac y WSL no cambian.
+
 ## 0.4.1 — Credencial de Wave en bloques lanzados
 - Un bloque abierto con `wsh run` recibe `WAVETERM_SWAPTOKEN` pero no `WAVETERM_JWT` (el canje lo hace la integración de shell, que en un bloque de comando no corre), así que un atril lanzado por `sym` no podía abrir a sus tutti ni poner badges. Ahora `sym launch --wave` y `sym conduct` envuelven el runner para que el bloque canjee el token al arrancar, igual que el bashrc de Wave, y `sym` canjea y cachea el JWT por bloque (`.wave/<blockid>.jwt`) para los bloques que ya estaban abiertos.
 - `wsh` se resuelve a ruta absoluta; `sym doctor` muestra el estado de la credencial.

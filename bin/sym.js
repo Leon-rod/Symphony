@@ -1086,10 +1086,15 @@ function waveReady(obra) { return !!waveEnv(obra); }
 function wsh(args, opts = {}, obra = null) { return spawnSync(wshBin(), args, { encoding: 'utf8', env: waveEnv(obra) || process.env, ...opts }); }
 // Envuelve el comando de un nodo para que su bloque canjee el swap token al arrancar, igual que el bashrc de Wave.
 // Así el runner y todo lo que lance (incluido `sym`) tienen WAVETERM_JWT y pueden abrir bloques, poner badges, etc.
+// Ojo: Wave NO pasa los argumentos de `wsh run --` tal cual. Los vuelve a citar al estilo POSIX (comillas simples)
+// y ejecuta la línea con `<shell> -c`. En Windows ese shell es pwsh, que no entiende ese citado: cualquier comilla
+// adentro del script se rompe. Por eso en Windows el script viaja en base64 (-EncodedCommand): sin comillas ni espacios.
 function wrapForWave(argv) {
   if (process.platform === 'win32') {
     const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
-    return ['pwsh', '-NoProfile', '-Command', `$o = & ${q(wshBin())} token $env:WAVETERM_SWAPTOKEN pwsh 2>$null | Out-String; if ($o) { Invoke-Expression $o }; Remove-Item Env:WAVETERM_SWAPTOKEN -ErrorAction SilentlyContinue; & ${argv.map(q).join(' ')}`];
+    const script = `$o = & ${q(wshBin())} token $env:WAVETERM_SWAPTOKEN pwsh 2>$null | Out-String; if ($o) { Invoke-Expression $o }; Remove-Item Env:WAVETERM_SWAPTOKEN -ErrorAction SilentlyContinue; & ${argv.map(q).join(' ')}; exit $LASTEXITCODE`;
+    const ps = spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0 ? 'pwsh' : 'powershell';
+    return [ps, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
   }
   const script = `eval "$(${quoteArg(wshBin())} token "$WAVETERM_SWAPTOKEN" bash 2>/dev/null)"; unset WAVETERM_SWAPTOKEN; exec "$@"`;
   return ['bash', '-c', script, 'symphony-wave', ...argv];
